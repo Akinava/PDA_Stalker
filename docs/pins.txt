@@ -1,0 +1,109 @@
+=== Atmega328
+N   ARDU  pin           descr
+01        PC6           RESET
+02   0    PD0  TX       CE  NRF24L01
+03   1    PD1  RX       CSN NRF24L01
+04   2    PD2  INT0     button B
+05   3    PD3  INT1 PWM speaker
+06   4    PD4           button A
+07        VCC           VCC
+08        GND           GND
+09        PB6           OSC1
+10        PB7           OSC2
+11   5    PD5       PWM LED
+12   6    PD6       PWM button down
+13   7    PD7           button right
+14   8    PB0           button left
+15   9    PB1       PWM button up
+16  10    PB2  SS   PWM CS SD
+17  11    PB3  MOSI PWM
+18  12    PB4  MISO
+19  13    PB5  SCK
+20        AVCC VCC
+21        AREF VCC
+22        GND  GND
+23  14 A0 PC0  ADC0     CS LCD Display
+24  15 A1 PC1  ADC1     microphone
+25  16 A2 PC2  ADC2     vibro motor
+26  17 A3 PC3  ADC3     button C
+27  18 A4 PC4  SDA
+28  19 A5 PC5  SCL
+
+=== SPEAKER
+VCC - 2N2222 - (+ SPEAKER -) - GND
+                       |
+                      PD3
+
+=== VIBRO MOTOR
+VCC - 2N2222 - (+ vibro motor -) - GND
+                       |
+                      PC2
+
+=== LED
+GND - resistor(200Ω) - LED - PD5
+
+=== NRF24L01
+             +--+--------------+
+(GND)  GND - |**| - VCC  (VCC) |
+(PD0)   CE - |**| - CNS  (PD1) |
+(PB5)  SCK - |**| - MOSI (PB3) |
+(PB4) MISO - |**| - IRQ        |
+             +--+--------------+
+
+=== Crystal
+GND + capacitor(22pF) --------+--------- OSC1
+    |                   crystal(16KHz)
+    + capacitor(22pF) --------+--------- OSC2
+
+=== SD Card adapter
++------+
+|  3V3*| - VCC
+|   CS*| - PB2
+| MOSI*| - PB3
+|  SCK*| - PB5
+| MISO*| - PB4
+|  GND*| - GND
++------+
+
+=== DC - DC3.3
+ IN - BATTERY
+OUT - VCC
+GND - GND
+
+=== buttons
+VCC - button left  - PB0
+VCC - button up    - PB1
+VCC - button C     - PC3
+VCC - button B     - PD2
+VCC - button A     - PD4
+VCC - button down  - PD6
+VCC - button right - PD7
+
+=== microphone
++------+
+|  GND*| - GND
+|  VDD*| - PB2
+| Gain*| -
+|  Out*| - PC1
+|   AR*| - 
++------+ -
+
+=== connector male (top)
+VCC   - VCC
+GND   - GND
+SDA   - PC4
+SCL   - PC5
+MOSI  - PB3
+MISO  - PB4
+SCK   - PB5
+RESET - PC6
+
+=== connector female (bottom)
+VCC   - VCC
+GND   - GND
+SDA   - PC4
+SCL   - PC5
+MOSI  - PB3
+MISO  - PB4
+SCK   - PB5
+rst   - PD5

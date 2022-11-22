@@ -1,0 +1,32 @@
+soft ===============================================================================
+
+Есть:
+bootloader / загрузка программ с диска / добавить прошивку fuses битов через make
+
+Сделать:
+device_test / тест железа
+spi_writer / Прошивка bootloader на стороннее устройство по SPI. Прошивка fuses.
+sd_format / форматирование SD карты
+file_manager / копирование, перемещения удаление файлов, создание копирование перемещения удаление папок, прием передача файлов по радио.
+eeprom_rw / дамп в файл eeprom память, запись из файла в eeprom память.
+t_editor / создание или/и редактирование файлов на диске в формате текст или бинарном формате.
+g_editor / графический редактор https://en.wikipedia.org/wiki/Netpbm
+pager / передача собщений адресату
+net_chat / аналогия с irc
+walkie_talkie / голосовой чат по каналам
+
+mp3_player https://www.mikrocontroller.net/topic/391086 https://embdev.net/topic/370373
+usb_com / программа позволяет превратить мастер устройство в usb-com переходник для прошивки slave устройства из IDE, на slave устройстве не требуется bootloader, для master устройства потребуется адаптер на usb
+arduino_to_pda.ino / прошивка загрузчика pda и установка fuse битов через arduino
+asm_compiler / компилятор asm в нативный код
+
+Портировать игры с
+gamebuino http://legacy.gamebuino.com/wiki/index.php?title=Games
+arduboy https://arduboy.com/
+
+hard ===============================================================================
+
+radio relay     / atiny85 + nrf24l01
+network gateway / raspberry pi zero w + nrf24l01
+
+Сделать QWEERTY клавиатуру на основе I2c expander например на mcp23017, для этого специально на micro-pc созданы порты расширения.
