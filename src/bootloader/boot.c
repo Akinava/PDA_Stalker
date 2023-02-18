@@ -1,7 +1,6 @@
 #include "boot.h"
 
 int main(void){
-
   MCUSR = ~(_BV(WDRF));
   watchdog_config_(WATCHDOG_RESET);
 

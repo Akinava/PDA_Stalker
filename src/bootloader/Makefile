@@ -26,6 +26,8 @@ HIGH_FUSE=0xDA
 LOW_FUSE = 0xFF
 EXTENDED_FUSE = 0xFD
 
+SHARED_FUNC = "load_default_app 7ffe load_app_by_name 7ffc load_app_by_cluster 7ffa"
+
 #=======================================
 
 OBJECTS = $(TARGET).o
@@ -131,24 +133,23 @@ help:
 # ===== Output messages
 
 # Define Messages
-# Русский
-MSG_ERRORS_NONE         = Ошибок: нет
-MSG_BEGIN               = -------- Начало компиляции --------
-MSG_END                 = -------- Конец компиляции ---------
-MSG_SIZE_BEFORE 	= --- Размер до:
-MSG_SIZE_AFTER 		= --- Размер после:
-MSG_COFF                = --- Конвертирование в AVR COFF:
-MSG_EXTENDED_COFF 	= --- Конвертирование в AVR Extended COFF:
-MSG_FLASH               = --- Создание загрузочного файла для Flash:
-MSG_EEPROM              = --- Создание загрузочного файла для EEPROM:
-MSG_EXTENDED_LISTING    = --- Создание разширенного листинга:
-MSG_SYMBOL_TABLE        = --- Создание таблицы обозначений:
-MSG_LINKING             = --- Линковка:
-MSG_COMPILING           = --- Компиляция C:
-MSG_COMPILING_CPP       = --- Компиляция C++:
-MSG_ASSEMBLING          = --- Ассемблирование:
-MSG_CLEANING            = --- Отчистка проекта:
-MSG_CREATING_LIBRARY    = --- Создание библиотеки:
+MSG_ERRORS_NONE         = Errors: no
+MSG_BEGIN               = -------- Begin --------
+MSG_END                 = -------- End ---------
+MSG_SIZE_BEFORE 	= --- Size before:
+MSG_SIZE_AFTER 		= --- Size after:
+MSG_COFF                = --- Convert to AVR COFF:
+MSG_EXTENDED_COFF 	= --- Convert to AVR Extended COFF:
+MSG_FLASH               = --- Make bootloader for Flash:
+MSG_EEPROM              = --- Make bootloader for EEPROM:
+MSG_EXTENDED_LISTING    = --- Make extended listing:
+MSG_SYMBOL_TABLE        = --- Make symbol table:
+MSG_LINKING             = --- Linking:
+MSG_COMPILING           = --- Compiling C:
+MSG_COMPILING_CPP       = --- Compiling C++:
+MSG_ASSEMBLING          = --- Assembling:
+MSG_CLEANING            = --- Cleaning:
+MSG_CREATING_LIBRARY    = --- Creating library:
 
 
 #------------------
@@ -203,7 +204,7 @@ clean_msg:
 	@echo $(MSG_CLEANING)
 
 clean_all:
-	rm -f *.hex *.elf $(OBJECTS)
+	rm -f *.hex *.elf *.asm $(OBJECTS)
 
 clean: clean_msg clean_all
 #------------------
@@ -239,6 +240,7 @@ $(TARGET).hex: $(TARGET).elf
 #	avr-objcopy --debugging -O coff-ext-avr $< $(TARGET).cof
 	avr-size $(TARGET).hex
 	avr-size $(TARGET).elf
+	./build_hex.sh $(TARGET) $(SHARED_FUNC)
 
 # цели отладки:
 disasm:	$(TARGET).elf

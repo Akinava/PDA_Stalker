@@ -1,4 +1,6 @@
-#ifndef PINS_H                                            
+#include <avr/io.h>
+
+#ifndef PINS_H
 #define PINS_H
                                                                                 
 // DEFINE BUTTON C

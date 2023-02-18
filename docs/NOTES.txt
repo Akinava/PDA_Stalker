@@ -90,14 +90,18 @@ current fuses Fuses            L:FF    H:DA        E:FD            BOOTSZ1 BOOTS
 
 
 2<<14 32768
+1 word 2 bytes
+128 byte in page
+64 words in page
+
 free space for loader
-                                                   firmware  free  free
+                                                       free  free  free
 bytes words pages start_address start_word_address    bytes words pages end_address end_word_adress fuse:H
-    0     0     0                                     32768 16384   256      0x8000          0x4000     df
-  512   256     4        0x7e00             0x3f00    32256 16128   252      0x7dff          0x3eff     de
- 1024   512     8        0x7c00             0x3e00    31744 15872   248      0x7bff          0x3dff     dc
- 2048  1024    16        0x7800             0x3c00    30720 15360   240      0x77ff          0x3bff     da
- 4096  2048    32        0x7000             0x3800    28672 14336   224      0x6fff          0x37ff     d8
+    0     0     0        0x8000             0x4000    32768 16384   256      0x8000          0x8000     df
+  512   256     4        0x7e00             0x3f00    32256 16128   252      0x8000          0x8000     de
+ 1024   512     8        0x7c00             0x3e00    31744 15872   248      0x8000          0x8000     dc
+ 2048  1024    16        0x7800             0x3c00    30720 15360   240      0x8000          0x8000     da
+ 4096  2048    32        0x7000             0x3800    28672 14336   224      0x8000          0x8000     d8
 
 
 arduino fuses                LOW=FF HIGH=DE EXTENDED=05
@@ -137,6 +141,20 @@ avrdude -c usbasp -p atmega328p -v -U eeprom:r:dump_eeprom.bin:r
 # write to flash                                               
 avrdude -c usbasp -p atmega328p -U flash:w:blink.hex
 ===============================================================================
+# pointer magic
+# i переменная
+uint8_t i = 5;
+# t забрать в переменную n значение 5
+uint8_t t = i;
+# p_i адрес переменной i
+uint8_t *p_i = &i;
+# забрать в переменную n значение 5
+uint8_t n = *p_i;
+# поменять значение переменной с 5 на 10 по аресу памяти переменной i переменная n знмчение не поменяет
+*p_i = 10;
+# положить в переменную p_i адрес на переменную n
+p_i = &n
+===============================================================================
 # Launching Games via Software
 
 #define load_game (*((void(*)(const char* filename))(0x7ffc/2)))
@@ -151,6 +169,9 @@ load_game("BLINK");
 
 void* bl = (void *) 0x3c00;
 goto *bl;
+# or
+void (*shared_function_ptr)(void) = blink_twice;
+
   # or
 ((void(*)(void))0)();
 
@@ -169,3 +190,398 @@ https://github.com/nickgammon/arduino_sketches/blob/master/Atmega_Board_Programm
 http://www.gammon.com.au/forum/?id=11638
 # ISP attiny85
 https://github.com/hexanaft/tinyx5usbasp/blob/master/SourceCode/isp.c
+
+avrdude -p atmega328p -c usbasp -v -v -U flash:w:main.hex
+
+make clean
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -c boot.c -o boot.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -Wl,-Ttext=0x7800 -o boot.elf boot.o
+
+load_default_app
+
+avr-objdump -S boot.elf > boot.elf.asm
+
+avr-objcopy -j .text -j .data -O ihex boot.elf boot.hex
+
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -Wl,--defsym,load_default_app=0x802000 -o boot.elf boot.o
+0x7F50
+
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -Wl,--defsym,load_default_app=0x2000 -o boot.elf boot.o
+
+--defsym,load_default_app=0x2000
+--section-start=.text=0x2000
+-Ttext=0x7800
+
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -Wl,--section-start=.text=0x2000 -o boot.elf boot.o
+
+
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -c main.c -o main.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -Wl,-Ttext=0x7800 -o main.elf main.o
+# dump all
+avr-objdump -D main.elf > main.elf.asm
+avr-objcopy -j .text -j .data -O ihex main.elf main.hex
+avrdude -c usbasp -p atmega328p -v -U flash:w:main.hex
+avr-size main.o
+#
+avrdude -c usbasp -p atmega328p -v -U flash:r:main.dump.hex:i
+
+
+# main pgm
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -c main.c -o main.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -o main.elf main.o
+avr-objcopy -j .text -j .data -O ihex main.elf main.hex
+avr-objdump -D main.elf > main.asm
+
+
+# button
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -c button.c -o button.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -o button.elf button.o
+avr-objcopy -j .text -j .data -O ihex button.elf button.hex
+avrdude -c usbasp -p atmega328p -v -U flash:w:button.hex
+avrdude -c usbasp -p atmega328p -v -U flash:r:button.dump.hex:i
+
+
+def get_controll_summ(s):
+    s = s.replace(':', '')
+    sum = 0
+    for x in range(int(len(s)/2)-1):
+        sum += int(s[x*2:x*2+2], 16)
+        print(s[x*2:x*2+2], sum)
+    sum = -(sum % 256)
+    print('-(sum % 256)', sum)
+    return '%02X' % (sum & 255), s[-2:]
+
+
+def get_controll_summ(s):
+    s = s.replace(':', '')
+    sum = 0
+    for x in range(int(len(s)/2)-1):
+        sum += int(s[x*2:x*2+2], 16)
+        print(s[x*2:x*2+2], sum)
+    sum =  sum % 256
+    print('sum % 256', sum)
+    sum = 256 - sum
+    print('256 - sum', sum)
+    return '%02X' % sum, s[-2:]
+
+get_controll_summ(":027FFE0011115F")
+
+11 417
+-(sum % 256) -161
+('5F', '5F')
+
+
+expr 1 + 1
+expr 417 % 256 (161) # %
+expr 256 - 161      (95)  #
+printf "%02X" "95"
+
+:100000000C9440000C944A000C944A000C944A0052
+:10 len
+0000 address
+00 data type
+0C9440000C944A000C944A000C944A00 machine code's
+32 controll summ
+
+:027FFE0011115F
+
+
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -Wl,--section-start=.fnaddr=0x4000 -o boot.elf boot.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -Wl,-Ttext=0x7800 -Wl,--section-start=__trampolines_end=0x1000 -o boot.elf boot.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -Wl,-Ttext=0x7800 -Wl,--section-start=noinit=0x1000 -o boot.elf boot.o
+
+# boot
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -c boot.c -o boot.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -Wl,-Ttext=0x7800 -o boot.elf boot.o
+avr-objdump -D boot.elf > boot.asm
+avr-nm boot.elf > boot.nm.txt
+grep '<blink_twice>:' boot.asm
+# define shared_function_addr
+avr-objcopy -j .text -j .data -O ihex boot.elf boot.hex
+
+
+# main static address
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -c main_with_address.c -o main_with_address.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -o main_with_address.elf main_with_address.o
+avr-objcopy -j .text -j .data -O ihex main_with_address.elf main_with_address.hex
+
+# join hex
+head -n -1 main_with_address.hex > main_with_address_and_boot.hex
+cat boot.hex >> main_with_address_and_boot.hex
+
+# load hex
+avrdude -c usbasp -p atmega328p -v -U flash:w:main_with_address_and_boot.hex
+# dump hex
+avrdude -c usbasp -p atmega328p -v -U flash:r:boot_dump.hex:i
+
+
+
+
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -Wl,--verbose -Wl,-Ttext=0x7800 -o boot.elf boot.o
+
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -Wl,-Tfnaddress=0x7800 -o boot.elf boot.o
+
+# linker script
+/usr/lib/avr/lib/ldscripts/avr5.xn
+
+=====
+const int shared_function_address __attribute__((section(".fnaddress"))) = (int)blink_twice;
+000078d2 <shared_function_address>:
+    78d2:	40 3c       	cpi	r20, 0xC0	; 192
+=====
+const int* shared_function_address __attribute__((section(".fnaddress"))) = blink_twice;
+00800100 <shared_function_address>:
+  800100:	40 3c       	cpi	r20, 0xC0	; 192
+=====
+const void* shared_function_address __attribute__((section(".fnaddress"))) = blink_twice;
+00800100 <shared_function_address>:
+  800100:	40 3c       	cpi	r20, 0xC0	; 192
+=====
+PGM_VOID_P* const shared_function_ptr PROGMEM = {blink_twice};
+00007868 <__trampolines_end>:
+    7868:	41 3c       	cpi	r20, 0xC1	; 193
+=====
+
+
+#define PROGMEM __ATTR_PROGMEM__
+#define __ATTR_PROGMEM__ __attribute__((__progmem__))
+
+
+Using built-in specs.
+Reading specs from /usr/lib/gcc/avr/5.4.0/device-specs/specs-atmega328p
+COLLECT_GCC=avr-gcc
+COLLECT_LTO_WRAPPER=/usr/lib/gcc/avr/5.4.0/lto-wrapper
+Target: avr
+Configured with: ../gcc/configure -v --enable-languages=c,c++ --prefix=/usr/lib --infodir=/usr/share/info --mandir=/usr/share/man --bindir=/usr/bin --libexecdir=/usr/lib --libdir=/usr/lib --enable-shared --with-system-zlib --enable-long-long --enable-nls --without-included-gettext --disable-libssp --disable-libcc1 --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=avr ASFLAGS= CFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong -Wformat ' CPPFLAGS='-Wdate-time -D_FORTIFY_SOURCE=2' CXXFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong -Wformat ' DFLAGS=-frelease FCFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong' FFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong' GCJFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -fstack-protector-strong' LDFLAGS='-Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -flto=auto -Wl,-z,relro' OBJCFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong -Wformat ' OBJCXXFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong -Wformat '
+Thread model: single
+gcc version 5.4.0 (GCC)
+COMPILER_PATH=/usr/lib/gcc/avr/5.4.0/:/usr/lib/gcc/avr/5.4.0/:/usr/lib/gcc/avr/:/usr/lib/gcc/avr/5.4.0/:/usr/lib/gcc/avr/:/usr/lib/gcc/avr/5.4.0/../../../avr/bin/
+LIBRARY_PATH=/usr/lib/gcc/avr/5.4.0/avr5/:/usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/:/usr/lib/gcc/avr/5.4.0/:/usr/lib/gcc/avr/5.4.0/../../../avr/lib/
+COLLECT_GCC_OPTIONS='-g' '-D' 'F_CPU=16000000UL' '-Os' '-Wall' '-std=gnu99'  '-v' '-o' 'boot.elf' '-specs=device-specs/specs-atmega328p' '-mmcu=avr5'
+ /usr/lib/gcc/avr/5.4.0/collect2 -plugin /usr/lib/gcc/avr/5.4.0/liblto_plugin.so -plugin-opt=/usr/lib/gcc/avr/5.4.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccBWxQQu.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lm -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-latmega328p -mavr5 -Tdata 0x800100 -o boot.elf /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega328p.o -L/usr/lib/gcc/avr/5.4.0/avr5 -L/usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5 -L/usr/lib/gcc/avr/5.4.0 -L/usr/lib/gcc/avr/5.4.0/../../../avr/lib -Ttext=0x7800 boot.o --start-group -lgcc -lm -lc -latmega328p --end-group
+
+
+Using built-in specs.
+Reading specs from /usr/lib/gcc/avr/5.4.0/device-specs/specs-atmega328p
+COLLECT_GCC=avr-gcc
+COLLECT_LTO_WRAPPER=/usr/lib/gcc/avr/5.4.0/lto-wrapper
+Target: avr
+Configured with: ../gcc/configure -v --enable-languages=c,c++ --prefix=/usr/lib --infodir=/usr/share/info --mandir=/usr/share/man --bindir=/usr/bin --libexecdir=/usr/lib --libdir=/usr/lib --enable-shared --with-system-zlib --enable-long-long --enable-nls --without-included-gettext --disable-libssp --disable-libcc1 --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=avr ASFLAGS= CFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong -Wformat ' CPPFLAGS='-Wdate-time -D_FORTIFY_SOURCE=2' CXXFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong -Wformat ' DFLAGS=-frelease FCFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong' FFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong' GCJFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -fstack-protector-strong' LDFLAGS='-Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -flto=auto -Wl,-z,relro' OBJCFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong -Wformat ' OBJCXXFLAGS='-g -O2 -ffile-prefix-map=/build/gcc-avr-VxQ9yL/gcc-avr-5.4.0+Atmel3.6.2=. -flto=auto -ffat-lto-objects -flto=auto -ffat-lto-objects -fstack-protector-strong -Wformat '
+Thread model: single
+gcc version 5.4.0 (GCC)
+COMPILER_PATH=/usr/lib/gcc/avr/5.4.0/:/usr/lib/gcc/avr/5.4.0/:/usr/lib/gcc/avr/:/usr/lib/gcc/avr/5.4.0/:/usr/lib/gcc/avr/:/usr/lib/gcc/avr/5.4.0/../../../avr/bin/
+LIBRARY_PATH=/usr/lib/gcc/avr/5.4.0/avr5/:/usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/:/usr/lib/gcc/avr/5.4.0/:/usr/lib/gcc/avr/5.4.0/../../../avr/lib/
+COLLECT_GCC_OPTIONS='-g' '-D' 'F_CPU=16000000UL' '-Os' '-Wall' '-std=gnu99'  '-v' '-o' 'boot.elf' '-specs=device-specs/specs-atmega328p' '-mmcu=avr5'
+ /usr/lib/gcc/avr/5.4.0/collect2 -plugin /usr/lib/gcc/avr/5.4.0/liblto_plugin.so -plugin-opt=/usr/lib/gcc/avr/5.4.0/lto-wrapper -plugin-opt=-fresolution=/tmp/cco1zA3M.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lm -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-latmega328p -mavr5 -Tdata 0x800100 -o boot.elf /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega328p.o -L/usr/lib/gcc/avr/5.4.0/avr5 -L/usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5 -L/usr/lib/gcc/avr/5.4.0 -L/usr/lib/gcc/avr/5.4.0/../../../avr/lib -Tfnaddress=0x7800 boot.o --start-group -lgcc -lm -lc -latmega328p --end-group
+/usr/lib/gcc/avr/5.4.0/../../../avr/bin/ld: cannot open linker script file fnaddress=0x7800: No such file or directory
+collect2: error: ld returned 1 exit status
+
+https://ww1.microchip.com/downloads/en/Appnotes/doc32158.pdf
+https://blog.thea.codes/the-most-thoroughly-commented-linker-script/
+https://bevice.ru/posts/1646.html
+https://www.opennet.ru/docs/RUS/gnu_ld/gnuld-3.html
+
+forum
+http://forum.easyelectronics.ru/ucp.php?mode=login
+https://www.avrfreaks.net/s/
+
+
+
+
+
+
+
+
+
+
+Задача: сделать функцию расположенный в загрузчике и доступный для запуска из загрузчика и из основной программы. Микроконтроллер atmega328p.
+
+тело загрузчика boot.c https://gist.github.com/Akinava/a92610744013f31ef77a0c5cfb54f16a
+
+логика загрузчика.
+1. если кнопка зажата помигать диодом
+2. перейти к основной программе
+
+функция для расшаривания "blink_twice"
+
+# компилирование:
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -c boot.c -o boot.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -Wl,-Ttext=0x7800 -o boot.elf boot.o
+# получение asm кода
+avr-objdump -D boot.elf > boot.asm
+# получение адреса функции
+grep '<blink_twice>:' boot.asm
+
+В моем случае адрес:
+00007880 <blink_twice>:
+
+В теле основной программы я могу воспользоваться ей так:
+
+#define shared_function_addr 0x7880 // blink_twice address
+#define shared_function (*((void(*)(void))(shared_function_addr/2)))
+shared_function();
+
+Проблема в том что сложно гарантировать что адрес 0x7880 не измениться при компиляции на другой версии компилятора.
+Так же адрес функции может изменится при изменении загрузчика.
+Тогда придется менять адрес в теле основной программы. И этого хотелось бы избежать.
+
+Одна из идей положить адрес функции в адресном пространстве загрузчика в конце flash памяти.
+1. переобразуем адрес байт в адрес слова 7880/2 -> 3c40
+2. меняем порядок байтов т.к. в памяти они лежат big-endian 3c40 -> 403c
+3. составляем hex строку и высчитываем контрольную сумму :027FFE00403c05
+4. добавляем строку в hex файл
+итог: https://gist.github.com/Akinava/a3fd44c931304c4db3a9c99aade9b6b7
+
+Теперь в теле основной программы достаточно в runtime средствами pgmspace вычитать значение указателя по адресу 0x7FFE что бы узнать адрес функции.
+
+Но данное решение кастыль.
+И к сожалению я не знаю как решить задачу иначе.
+
+
+Я чувствую что данный вопрос из области компановщика/линкера но решить его у меня не хватает опыта.
+Буду рад любой помощи, идеи или отсылке к похожим решениям.
+Заранее спасибо.
+
+
+** PS
+Я пробовал положить адрес функции с помощью строки:
+void* const shared_function_address __attribute__((__progmem__)) = blink_twice;
+Это добавляет адрес функции в hex файл но как разместить его по адресу 0x7FFE я способа не нашел.
+
+** PPS
+Так же я пробовал положить адрес с помощью строки:
+void* const shared_function_address __attribute__((section("fnaddr"))) = blink_twice;
+
+что бы скомпилировать таким способом:
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -c boot.c -o boot.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -Wl,-Ttext=0x7800 -Wl,--section-start=fnaddr=0x7FFE -o boot.elf boot.o
+
+если сгенерировать asm
+avr-objdump -D boot.elf > boot.asm
+
+то там можно найти часть
+Disassembly of section fnaddr:
+00007ffe <shared_function_address>:
+    7ffe:	40 3c       	cpi	r20, 0xC0	; 192
+
+но при получении hex файла не будет срок 403c по адресу 7ffe
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+atmega328p bootloader shared function
+
+
+
+My goal to place the "shared function" in boot sector which will be accessible for run from boot application and also from main application. Microcontroller atmega328p.
+
+code of boot app: boot.c https://gist.github.com/Akinava/a92610744013f31ef77a0c5cfb54f16a
+
+logic of boot application:
+1. If button is pressed then blink of the LED.
+2. goto main app
+
+The shared function has name "blink_twice"
+
+# compiling:
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -c boot.c -o boot.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -Wl,-Ttext=0x7800 -o boot.elf boot.o
+# convert to asm
+avr-objdump -D boot.elf > boot.asm
+# get for function address
+grep '<blink_twice>:' boot.asm
+
+In my case it is:
+00007880 <blink_twice>:
+
+From boot app and main app the "shared function" I can use that way:
+#define shared_function_addr 0x7880 // blink_twice address
+#define shared_function (*((void(*)(void))(shared_function_addr/2)))
+shared_function();
+
+The issue with this approach:
+- It is hard to guarantee that the address 0x7880 will not change on another compiler version.
+- The address 0x7880 can be changed if the boot app will have a changes.
+As consequences of that it will be required to change the address in the main app. And that I want to avoid.
+
+One of the idea was to store "shared function" address in the constant address (0x7FFE) in flash memory.
+1. convert address to word 7880/2 -> 3c40
+2. change to big-endian 3c40 -> 403c
+3. build a "hex" line and calculate a control summ :02 7FFE 00 403c 05
+4. add the "hex" line into the hex file
+The result is here: https://gist.github.com/Akinava/a3fd44c931304c4db3a9c99aade9b6b7
+
+Now in the main app runtime use the pgmspace it is possible read address of "shared function" from address 0x7FFE.
+
+But I feel the solution is a monkeypatch.
+And now I do not see another way how to solve it.
+
+I feel the solution belong to linker area but I do not have enough experience for that.
+I will be really grateful for any help.
+
+
+
+** PS
+Also I tried to store "shared function" address with line:
+void* const shared_function_address __attribute__((__progmem__)) = blink_twice;
+It is added the address in the "hex" file but I didn't found the way how to put it on specific address in flash memory.
+
+** PPS
+Also I tried to store "shared function" address with below line:
+void* const shared_function_address __attribute__((section("fnaddr"))) = blink_twice;
+
+for compiling I used commands:
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -c boot.c -o boot.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -Wl,-Ttext=0x7800 -Wl,--section-start=fnaddr=0x7FFE -o boot.elf boot.o
+
+After make asm
+avr-objdump -D boot.elf > boot.asm
+
+In boot.asm file I can see lines:
+Disassembly of section fnaddr:
+00007ffe <shared_function_address>:
+    7ffe:	40 3c       	cpi	r20, 0xC0	; 192
+
+But in "hex" file I can't find data "403c" by address "0x7ffe"
+
+
+https://forum.arduino.cc/t/atmega328p-bootloader-shared-function/1072272
+https://www.avrfreaks.net/s/topic/a5C3l000000UlYPEA0/t193350
+
+https://stackoverflow.com/questions/64898849/what-linkerscript-does-arduino-ide-use-when-compiling-for-the-arduino-uno
+https://publications.gbdirect.co.uk//c_book/chapter4/linkage.html
+
+https://forum.arduino.cc/t/writing-to-flash-memory/40696/2
+https://forum.arduino.cc/t/placing-memory-constants-at-a-fixed-location/914387
+
+# linker script
+/usr/lib/avr/lib/ldscripts/avr5.xn
+
+# compiling:
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -c boot.c -o boot.o
+avr-gcc -g -DF_CPU=16000000UL -Os -Wall -std=gnu99 -mmcu=atmega328p -v -Wl,-Ttext=0x7800 -Wl,--section-start=.noinit=0x0000 -o boot.elf boot.o
+# convert to asm
+avr-objdump -D boot.elf > boot.asm
+
+avr-objcopy -j .text -j .data -O ihex boot.elf boot.hex
+
+
+load_default_app    7edc 7ffe
+load_app_by_name    7ca0 7ffc
+load_app_by_cluster 7ba4 7ffa
+
+read by pointer
+https://forum.arduino.cc/t/problem-reading-pointer-to-progmem-int-variable-with-pgm_read_word/550554/2
