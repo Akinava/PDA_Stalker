@@ -26,8 +26,9 @@ HIGH_FUSE=0xDA
 LOW_FUSE = 0xFF
 EXTENDED_FUSE = 0xFD
 
-SHARED_FUNC = "load_default_app 7ffe load_app_by_name 7ffc load_app_by_cluster 7ffa"
-
+SHARED_FUNC = load_default_app 7ffe
+SHARED_FUNC += load_app_by_name 7ffc
+SHARED_FUNC += load_app_by_cluster 7ffa
 #=======================================
 
 OBJECTS = $(TARGET).o
@@ -240,7 +241,7 @@ $(TARGET).hex: $(TARGET).elf
 #	avr-objcopy --debugging -O coff-ext-avr $< $(TARGET).cof
 	avr-size $(TARGET).hex
 	avr-size $(TARGET).elf
-	./build_hex.sh $(TARGET) $(SHARED_FUNC)
+	./build_hex.sh "$(TARGET)" "$(SHARED_FUNC)"
 
 # цели отладки:
 disasm:	$(TARGET).elf
