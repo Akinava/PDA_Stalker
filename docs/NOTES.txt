@@ -585,3 +585,33 @@ load_app_by_cluster 7ba4 7ffa
 
 read by pointer
 https://forum.arduino.cc/t/problem-reading-pointer-to-progmem-int-variable-with-pgm_read_word/550554/2
+
+const int *pointer = 0x7ffe;
+int *x = (int*)pgm_read_word(&pointer);
+mySerial.println(*x);
+
+
+load_default_app_addr 0x7ffe    16238 hex 0x3f6e 0x7edc 00007edc <load_default_app>:
+load_app_by_name_addr 0x7ffc    15952 hex 0x3e50 0x7ca0 00007ca0 <load_app_by_name>:
+load_app_by_cluster_addr 0x7ffa 15826 hex 0x3dd2 0x7ba4 00007ba4 <load_app_by_cluster>:
+
+
+# ==============================================
+
+### DISPLAY
+#include <U8g2lib.h>
+U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* CS=*/ 14, /* reset=*/ 8);
+
+# ==============================================
+
+# Arduino compile / build
+arduino-cli lib install U8g2
+arduino-cli compile -b arduino:avr:uno ./FontUsage.ino --output-dir ./
+
+#
+avrdude -c usbasp -p atmega328p -v -U flash:w:main_with_address_and_boot.hex
+
+https://habr.com/en/articles/213459/
+
+# ==============================================
+
