@@ -1,16 +1,16 @@
 === Atmega328
 N   ARDU  pin           descr
 01        PC6           RESET
-02   0    PD0  TX       CE  NRF24L01
-03   1    PD1  RX       CSN NRF24L01
-04   2    PD2  INT0     button B
-05   3    PD3  INT1 PWM speaker
-06   4    PD4           button A
+02   0    PD0  TX       LED
+03   1    PD1  RX       button B
+04   2    PD2  INT0     button C
+05   3    PD3  INT1 PWM button A
+06   4    PD4           CE  NRF24L01
 07        VCC           VCC
 08        GND           GND
 09        PB6           OSC1
 10        PB7           OSC2
-11   5    PD5       PWM LED
+11   5    PD5       PWM speaker
 12   6    PD6       PWM button down
 13   7    PD7           button right
 14   8    PB0           button left
@@ -25,14 +25,14 @@ N   ARDU  pin           descr
 23  14 A0 PC0  ADC0     CS LCD Display
 24  15 A1 PC1  ADC1     microphone
 25  16 A2 PC2  ADC2     vibro motor
-26  17 A3 PC3  ADC3     button C
+26  17 A3 PC3  ADC3     CSN NRF24L01
 27  18 A4 PC4  SDA
 28  19 A5 PC5  SCL
 
 === SPEAKER
 VCC - 2N2222 - (+ SPEAKER -) - GND
                        |
-                      PD3
+                      PD5
 
 === VIBRO MOTOR
 VCC - 2N2222 - (+ vibro motor -) - GND
@@ -40,13 +40,13 @@ VCC - 2N2222 - (+ vibro motor -) - GND
                       PC2
 
 === LED
-GND - resistor(200Ω) - LED - PD5
+GND - resistor(200Ω) - LED - PD0
 
 === NRF24L01
              +--+--------------+
 (GND)  GND - |**| - VCC  (VCC) |
-(PD0)   CE - |**| - CNS  (PD1) |
-(PB5)  SCK - |**| - MOSI (PB3) |
+(PD4)   CE - |**| - CNS  (PC3) |----+
+(PB5)  SCK - |**| - MOSI (PB3) |----+
 (PB4) MISO - |**| - IRQ        |
              +--+--------------+
 
@@ -73,9 +73,9 @@ GND - GND
 === buttons
 VCC - button left  - PB0
 VCC - button up    - PB1
-VCC - button C     - PC3
-VCC - button B     - PD2
-VCC - button A     - PD4
+VCC - button C     - PD2
+VCC - button B     - PD1
+VCC - button A     - PD3
 VCC - button down  - PD6
 VCC - button right - PD7
 
@@ -88,7 +88,7 @@ VCC - button right - PD7
 |   AR*| - 
 +------+ -
 
-=== connector male (top)
+=== (connector) female master (top)
 VCC   - VCC
 GND   - GND
 SDA   - PC4
@@ -96,9 +96,12 @@ SCL   - PC5
 MOSI  - PB3
 MISO  - PB4
 SCK   - PB5
-RESET - PC6
+TX    - PD0
+RX    - PD1
+rst   - PC2
 
-=== connector female (bottom)
+
+=== (pcb) male slave (bottom)
 VCC   - VCC
 GND   - GND
 SDA   - PC4
@@ -106,4 +109,6 @@ SCL   - PC5
 MOSI  - PB3
 MISO  - PB4
 SCK   - PB5
-rst   - PD5
+TX    - PD0
+RX    - PD1
+RESET - PC6
