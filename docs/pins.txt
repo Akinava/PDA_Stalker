@@ -10,7 +10,7 @@ N   ARDU  pin           descr
 08        GND           GND
 09        PB6           OSC1
 10        PB7           OSC2
-11   5    PD5       PWM speaker
+11   5    PD5       PWM SPEAKER
 12   6    PD6       PWM button down
 13   7    PD7           button right
 14   8    PB0           button left
@@ -96,9 +96,9 @@ SCL   - PC5
 MOSI  - PB3
 MISO  - PB4
 SCK   - PB5
-TX    - PD0
-RX    - PD1
-rst   - PC2
+TX    - PD0 (LED)
+RX    - PD1 (button B)
+rst   - PD5 (SPEAKER)
 
 
 === (pcb) male slave (bottom)
@@ -109,6 +109,6 @@ SCL   - PC5
 MOSI  - PB3
 MISO  - PB4
 SCK   - PB5
-TX    - PD0
-RX    - PD1
-RESET - PC6
+TX    - PD0 (LED)
+RX    - PD1 (button B)
+RESET - PC6 (RESET)

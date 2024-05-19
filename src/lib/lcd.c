@@ -1,4 +1,4 @@
-#include "display.h"
+#include "lcd.h"
 
 
 void lcd_send_cmd(char c){

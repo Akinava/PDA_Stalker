@@ -612,6 +612,25 @@ arduino-cli compile -b arduino:avr:uno ./FontUsage.ino --output-dir ./
 avrdude -c usbasp -p atmega328p -v -U flash:w:main_with_address_and_boot.hex
 
 https://habr.com/en/articles/213459/
+https://www.onetransistor.eu/2018/03/code-text-mode-st7920-arduino.html
+https://github.com/cbm80amiga/ST7920_SPI
+
+https://gist.github.com/Akinava/67a29ff2f61c303717e806cf2f84e7da
+https://github.com/Akinava/pip-boy/blob/master/src/device_test/test.h
+https://github.com/cbm80amiga/ST7290_CGROM_font_test/blob/master/ST7290_CGROM_font_test.ino
+
+# SPI
+https://mansfield-devine.com/speculatrix/2018/01/avr-basics-spi-on-the-atmega-part-1/
+https://mansfield-devine.com/speculatrix/2018/01/avr-basics-spi-on-the-atmega-part-2/
+SPI2X   SPR1    SPR0    SCK Frequency
+0       0       0       Fosc / 4
+0 	    0 	    1 	    Fosc / 16
+0 	    1 	    0 	    Fosc / 64
+0 	    1 	    1 	    Fosc / 128
+1 	    0 	    0 	    Fosc / 2
+1 	    0 	    1 	    Fosc / 8
+1 	    1 	    0 	    Fosc / 32
+1 	    1 	    1 	    Fosc / 64
 
 # ==============================================
 
