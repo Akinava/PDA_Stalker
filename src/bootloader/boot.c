@@ -26,30 +26,33 @@ void load_default_app(void){
 }
 
 void load_app_by_name(const char* file_path){
+  prepare_load_();
+  if (!find_file_by_path(file_path)){
+    error_blink_();
+  }
+  write_app_(file.cluster, file.size);
+}
+
+void load_app_by_cluster(uint16_t cluster, uint32_t size){
+  prepare_load_();
+  write_app_(cluster, size);
+}
+
+void prepare_load_(void){
   // may be called from the application: flash is rewritten, so no interrupts
   cli();
   watchdog_config_(WATCHDOG_OFF);
   setup_led_();
-
-  if (!sd_init()){
-    error_light_();
-  }
- 
-  if (!find_file_by_path(file_path)){
-    error_blink_();
-  }
-  load_app_by_cluster(file.cluster, file.size);
+  if (!sd_init()){error_light_();}
 }
 
-void load_app_by_cluster(uint16_t cluster, uint32_t size){
-  cli();
-  watchdog_config_(WATCHDOG_OFF);
-  setup_led_();
+void write_app_(uint16_t cluster, uint32_t size){
   // application must not overwrite the bootloader
-  if (size > BOOT_START){error_blink_();}
-  if (!sd_init()){error_light_();}
+  if (!size || size > BOOT_START){error_blink_();}
 
-  uint32_t sector = get_sector_by_cluster_(cluster);
+  file.cluster = cluster;
+  file.sector = get_sector_by_cluster_(cluster);
+  uint8_t cluster_sector = 0;
   uint32_t address = 0;
   uint8_t page_cursor = SPM_PAGESIZE;
 
@@ -57,8 +60,14 @@ void load_app_by_cluster(uint16_t cluster, uint32_t size){
     uint16_t sector_offset = address % SECTOR_BUFFER_SIZE;
     // read next sector
     if (sector_offset == 0){
-      if (!read_sector_(sector)){error_blink_();}
-      sector++;
+      // cluster is over - go to the next one by FAT chain
+      if (cluster_sector == vol_info.sectors_per_claster){
+        if (!next_cluster_()){error_blink_();}
+        cluster_sector = 0;
+      }
+      if (!read_sector_(file.sector)){error_blink_();}
+      file.sector++;
+      cluster_sector++;
     }
     // read word
     uint16_t temp_word = *((uint16_t*)(sector_buffer + sector_offset));
@@ -214,12 +223,12 @@ static inline uint8_t next_sector(void){
 
   if (file.cluster == ROOT_CLUSTER){
     //                 /                                     root sectors                                            /
-    if (file.sector <= root_sector_ + vol_info.root_directory_entries * OBJECT_RECORD_SIZE / vol_info.bytes_per_sector){
+    if (file.sector < root_sector_ + vol_info.root_directory_entries * OBJECT_RECORD_SIZE / vol_info.bytes_per_sector){
       return 1;
     }
   }else{
     //                 last sector in cluster
-    if (file.sector <= get_sector_by_cluster_(file.cluster) + vol_info.sectors_per_claster){
+    if (file.sector < get_sector_by_cluster_(file.cluster) + vol_info.sectors_per_claster){
       return 1;
     }
     if(next_cluster_()){return 1;}
@@ -228,10 +237,10 @@ static inline uint8_t next_sector(void){
 }
 
 static inline uint8_t next_cluster_(void){
-  uint16_t fat_cluster_place = file.cluster * sizeof(file.cluster);
-  if (!read_sector_(fat_sector_)){return 0;}
-  file.cluster = *((uint32_t*)(sector_buffer + fat_cluster_place));
-  if (file.sector >= END_OF_CLASTERCHAIN){return 0;}
+  // FAT16: 256 two-byte records in a 512-byte FAT sector
+  if (!read_sector_(fat_sector_ + (file.cluster >> 8))){return 0;}
+  file.cluster = ((uint16_t*)sector_buffer)[file.cluster & 0xFF];
+  if (file.cluster < 2 || file.cluster >= END_OF_CLASTERCHAIN){return 0;}
   file.sector = get_sector_by_cluster_(file.cluster);
   return 1;
 }

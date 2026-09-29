@@ -15,6 +15,8 @@ const int (*app_start)(void) = 0x0;
 void load_default_app(void);
 void load_app_by_name(const char* file_path);
 void load_app_by_cluster(uint16_t cluster, uint32_t size);
+void prepare_load_(void);
+void write_app_(uint16_t cluster, uint32_t size) __attribute__((noreturn));
 
 static inline void setup_button_(void);
 static inline void setup_led_(void);
