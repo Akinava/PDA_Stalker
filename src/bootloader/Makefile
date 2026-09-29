@@ -26,9 +26,8 @@ HIGH_FUSE=0xDA
 LOW_FUSE = 0xFF
 EXTENDED_FUSE = 0xFD
 
-SHARED_FUNC = load_default_app 7ffe
-SHARED_FUNC += load_app_by_name 7ffc
-SHARED_FUNC += load_app_by_cluster 7ffa
+# table of shared functions (see shared_func_ in boot.c)
+SHARED_FUNC_ADDRESS = 0x7ffa
 #=======================================
 
 OBJECTS = $(TARGET).o
@@ -81,6 +80,7 @@ CFLAGS += $(CSTANDARD)
 
 ifeq ($(BOOT),true)
 	BOOTFLAG = -Wl,-Ttext=$(BOOT_ADDRESS)
+	BOOTFLAG += -Wl,--section-start=.shared_func=$(SHARED_FUNC_ADDRESS)
 endif
 
 
@@ -238,11 +238,11 @@ $(TARGET).elf: $(OBJECTS)
 
 $(TARGET).hex: $(TARGET).elf
 	rm -f $(TARGET).hex
-	avr-objcopy -j .text -j .data -O ihex $(TARGET).elf $(TARGET).hex
+	avr-objcopy -j .text -j .data -j .shared_func -O ihex $(TARGET).elf $(TARGET).hex
 #	avr-objcopy --debugging -O coff-ext-avr $< $(TARGET).cof
 	avr-size $(TARGET).hex
 	avr-size $(TARGET).elf
-	./build_hex.sh "$(TARGET)" "$(SHARED_FUNC)"
+	$(OBJDUMP) -D $(TARGET).elf > $(TARGET).asm
 
 # цели отладки:
 disasm:	$(TARGET).elf

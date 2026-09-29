@@ -21,6 +21,15 @@ int main(void){
   app_start();
 }
 
+// Word addresses of shared functions for the application.
+// The linker places the section at SHARED_FUNC_ADDRESS (end of flash):
+// 0x7ffa - load_app_by_cluster, 0x7ffc - load_app_by_name, 0x7ffe - load_default_app
+const uint16_t shared_func_[] __attribute__((section(".shared_func"), used)) = {
+  (uint16_t)load_app_by_cluster,
+  (uint16_t)load_app_by_name,
+  (uint16_t)load_default_app,
+};
+
 void load_default_app(void){
   load_app_by_name(BOOT_APP);
 }
