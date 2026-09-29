@@ -45,14 +45,14 @@ GND - resistor(200Ω) - LED - PD0
 === NRF24L01
              +--+--------------+
 (GND)  GND - |**| - VCC  (VCC) |
-(PD4)   CE - |**| - CNS  (PC3) |----+
+(PD4)   CE - |**| - CSN  (PC3) |----+
 (PB5)  SCK - |**| - MOSI (PB3) |----+
 (PB4) MISO - |**| - IRQ        |
              +--+--------------+
 
 === Crystal
 GND + capacitor(22pF) --------+--------- OSC1
-    |                   crystal(16KHz)
+    |                   crystal(16MHz)
     + capacitor(22pF) --------+--------- OSC2
 
 === SD Card adapter
@@ -71,13 +71,13 @@ OUT - VCC
 GND - GND
 
 === buttons
-VCC - button left  - PB0
-VCC - button up    - PB1
-VCC - button C     - PD2
-VCC - button B     - PD1
-VCC - button A     - PD3
-VCC - button down  - PD6
-VCC - button right - PD7
+GND - button left  - PB0
+GND - button up    - PB1
+GND - button C     - PD2
+GND - button B     - PD1
+GND - button A     - PD3
+GND - button down  - PD6
+GND - button right - PD7
 
 === microphone
 +------+

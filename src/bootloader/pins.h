@@ -4,15 +4,15 @@
 #define PINS_H
                                                                                 
 // DEFINE BUTTON C
-#define BUTTON_C_DDR DDRC
-#define BUTTON_C_PORT PORTC
-#define BUTTON_C_PINS PINC
-#define BUTTON_C_PIN PC3
+#define BUTTON_C_DDR DDRD
+#define BUTTON_C_PORT PORTD
+#define BUTTON_C_PINS PIND
+#define BUTTON_C_PIN PD2
 
 // DEFINE LED
 #define LED_DDR DDRD
 #define LED_PORT PORTD
-#define LED_PIN PD5
+#define LED_PIN PD0
 
 // SD
 #define SD_DDR DDRB

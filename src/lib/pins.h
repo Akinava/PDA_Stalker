@@ -48,7 +48,7 @@
 // DEFINE LED
 #define LED_DDR DDRD
 #define LED_PORT PORTD
-#define LED_PIN PD5
+#define LED_PIN PD0
 
 // DEFINE VIBRO
 #define VIBRO_DDR DDRC
@@ -91,8 +91,8 @@
 #define SCK PB5
 
 // I2C
-#define I2C_DDR DDRB
-#define I2C_PORT PORTB
+#define I2C_DDR DDRC
+#define I2C_PORT PORTC
 #define SDA PC4
 #define SCL PC5
 
