@@ -1,12 +1,12 @@
 #ifndef MACRO_H
 #define MACRO_H
 
-// Set pin direction
+// define direction register
 #define SET_DDR_OUT(DDR, PIN) DDR |= _BV(PIN)                                   
 #define SET_DDR_IN(DDR, PIN) DDR &= ~ _BV(PIN)                                  
 #define SET_PULLUP(PORTS, PIN) PORTS |= _BV(PIN)                                
                                                                                  
-// Set pin level
+// Set port level
 #define SET_HIGH(PORTS, PIN) PORTS |= _BV(PIN)                                  
 #define SET_LOW(PORTS, PIN) PORTS &= ~ _BV(PIN)                                 
 #define TOGGLE(PORTS, PIN) PORTS ^= _BV(PIN);                                   

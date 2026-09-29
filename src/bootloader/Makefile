@@ -38,6 +38,7 @@ OBJECTS = $(TARGET).o
 
 # Place -D or -U options here for C sources
 CDEFS = -DF_CPU=$(F_CPU)UL
+CDEFS += -DBOOT_START=$(BOOT_ADDRESS)
 
 
 # Compiler flag to set the C Standard level.

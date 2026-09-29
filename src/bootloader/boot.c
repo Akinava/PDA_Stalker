@@ -2,11 +2,13 @@
 
 int main(void){
   MCUSR = ~(_BV(WDRF));
-  watchdog_config_(WATCHDOG_RESET);
+  watchdog_config_(WATCHDOG_OFF);
 
   // MAIN LOGIC
   setup_button_();
-  
+  // wait for pull-up to charge the pin and input synchronizer to update
+  _delay_us(10);
+
   if(CHECK_PIN(BUTTON_C_PINS, BUTTON_C_PIN)){
     setup_led_();
     SET_HIGH(LED_PORT, LED_PIN);
@@ -24,6 +26,9 @@ void load_default_app(void){
 }
 
 void load_app_by_name(const char* file_path){
+  // may be called from the application: flash is rewritten, so no interrupts
+  cli();
+  watchdog_config_(WATCHDOG_OFF);
   setup_led_();
 
   if (!sd_init()){
@@ -37,7 +42,11 @@ void load_app_by_name(const char* file_path){
 }
 
 void load_app_by_cluster(uint16_t cluster, uint32_t size){
+  cli();
+  watchdog_config_(WATCHDOG_OFF);
   setup_led_();
+  // application must not overwrite the bootloader
+  if (size > BOOT_START){error_blink_();}
   if (!sd_init()){error_light_();}
 
   uint32_t sector = get_sector_by_cluster_(cluster);
@@ -228,7 +237,7 @@ static inline uint8_t next_cluster_(void){
 }
 
 uint32_t get_sector_by_cluster_(uint16_t cluster){
-  return data_sector_ + ((cluster-2) * vol_info.sectors_per_claster);
+  return data_sector_ + ((uint32_t)(cluster-2) * vol_info.sectors_per_claster);
 }
 
 //============================== sd func ====================================//
