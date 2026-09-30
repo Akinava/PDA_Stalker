@@ -5,7 +5,7 @@ N   ARDU  pin           descr
 03   1    PD1  RX       button B
 04   2    PD2  INT0     button C
 05   3    PD3  INT1 PWM button A
-06   4    PD4           CE  NRF24L01
+06   4    PD4           CE NRF24L01
 07        VCC           VCC
 08        GND           GND
 09        PB6           OSC1
@@ -22,7 +22,7 @@ N   ARDU  pin           descr
 20        AVCC VCC
 21        AREF VCC
 22        GND  GND
-23  14 A0 PC0  ADC0     CS LCD Display
+23  14 A0 PC0  ADC0     CS LCD Display ST7920 128x64
 24  15 A1 PC1  ADC1     microphone
 25  16 A2 PC2  ADC2     vibro motor
 26  17 A3 PC3  ADC3     CSN NRF24L01
@@ -96,10 +96,7 @@ SCL   - PC5
 MOSI  - PB3
 MISO  - PB4
 SCK   - PB5
-TX    - PD0 (LED)
-RX    - PD1 (button B)
 rst   - PD5 (SPEAKER)
-
 
 === (pcb) male slave (bottom)
 VCC   - VCC
@@ -109,6 +106,28 @@ SCL   - PC5
 MOSI  - PB3
 MISO  - PB4
 SCK   - PB5
-TX    - PD0 (LED)
-RX    - PD1 (button B)
 RESET - PC6 (RESET)
+
+=== LCD Display ST7920 128x64
++------+
+|  GND*| - GND
+|  VCC*| - VCC
+|   V0*| -
+|   RS*| - PC0 CS LCD Display ST7920 128x64
+|  R/W*| - PB3 MOSI
+|    E*| - PB5 SCK
+|  DB0*| -
+|  DB1*| -
+|  DB2*| -
+|  DB3*| -
+|  DB4*| -
+|  DB5*| -
+|  DB6*| -
+|  DB7*| -
+|  PSB*| - GND
+|   NS*| -
+|  RST*| -
+| VOUT*| -
+|  BLA*| - VCC
+|  BLK*| - GND
++------+
