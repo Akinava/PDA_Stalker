@@ -65,6 +65,12 @@ typedef struct {
   uint32_t left;              // bytes left to read
 } fat16_file_t;
 
+// position of the random access to a file: cluster number `index` of the chain
+typedef struct {
+  uint16_t index;
+  uint16_t cluster;           // 0 - not set
+} fat16_seek_t;
+
 // buf is 512 byte work buffer in all functions
 uint8_t fat16_mount(uint8_t *buf);
 uint16_t fat16_dir_count(uint16_t dir_cluster, uint8_t *buf);
@@ -77,5 +83,7 @@ void fat16_dir_walk(uint16_t dir_cluster, uint8_t *buf, fat16_visit_t visit, voi
 void fat16_entry_from_record(fat16_entry_t *entry, const uint8_t *record);
 void fat16_file_open(fat16_file_t *file, uint16_t cluster, uint32_t size);
 uint8_t fat16_file_read(fat16_file_t *file, uint8_t *buf, uint16_t *len);
+uint8_t fat16_file_sector(uint16_t first, uint32_t index, fat16_seek_t *seek,
+                          uint32_t *sector, uint8_t *buf);
 
 #endif

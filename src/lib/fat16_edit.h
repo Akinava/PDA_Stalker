@@ -35,5 +35,25 @@ uint8_t fat16_mkdir(uint16_t dir_cluster, const uint8_t *raw, uint8_t *buf);
 uint8_t fat16_write_file(fat16_entry_t *entry, const uint8_t *data, uint32_t size, uint8_t *buf);
 uint8_t fat16_create_file(uint16_t dir_cluster, const uint8_t *raw, const uint8_t *data,
                           uint32_t size, fat16_entry_t *entry, uint8_t *buf);
+uint8_t fat16_find(uint16_t dir_cluster, const uint8_t *raw, fat16_entry_t *entry, uint8_t *buf);
+uint8_t fat16_name_exists(uint16_t dir_cluster, const uint8_t *raw, uint8_t *buf);
+
+// big files: data by sectors to a new chain, then the chain goes to a file
+typedef struct {
+  uint16_t first;             // 0 - nothing is written
+  uint16_t cluster;
+  uint8_t sector;             // in the cluster
+} fat16_writer_t;
+
+void fat16_writer_open(fat16_writer_t *writer);
+uint8_t fat16_writer_prepare(fat16_writer_t *writer, uint8_t *buf);
+uint8_t fat16_writer_sector(fat16_writer_t *writer, const uint8_t *data, uint8_t *buf);
+uint8_t fat16_free(uint16_t first, uint8_t *buf);
+uint8_t fat16_chain_append(uint16_t last, uint16_t *cluster, uint8_t *buf);
+uint8_t fat16_set_data(fat16_entry_t *entry, uint16_t first, uint32_t size,
+                       uint16_t *old, uint8_t *buf);
+uint8_t fat16_replace_data(fat16_entry_t *entry, uint16_t first, uint32_t size, uint8_t *buf);
+uint8_t fat16_add_file(uint16_t dir_cluster, const uint8_t *raw, uint16_t first,
+                       uint32_t size, fat16_entry_t *entry, uint8_t *buf);
 
 #endif

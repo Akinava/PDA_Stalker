@@ -222,3 +222,34 @@ uint8_t fat16_file_read(fat16_file_t *file, uint8_t *buf, uint16_t *len){
   file->left -= *len;
   return 1;
 }
+
+// card sector of the sector number index of the chain from the first cluster,
+// seek keeps the position between calls (set its cluster to 0 for a new chain).
+// returns 0 if the chain is shorter
+uint8_t fat16_file_sector(uint16_t first, uint32_t index, fat16_seek_t *seek,
+                          uint32_t *sector, uint8_t *buf){
+  uint16_t cluster_index = index / fat16_volume.cluster_sectors;
+  uint32_t loaded = 0;
+
+  // the chain goes only forward: start again from the first cluster
+  if(!seek->cluster || seek->index > cluster_index){
+    seek->index = 0;
+    seek->cluster = first;
+  }
+  if(seek->cluster < 2) return 0;
+
+  while(seek->index < cluster_index){
+    // clusters of a chain are usually in the same FAT sector: read it once
+    uint32_t fat_sector = fat16_volume.fat_sector + (seek->cluster >> 8);
+    if(fat_sector != loaded){
+      if(!sd_read_sector(fat_sector, buf)) return 0;
+      loaded = fat_sector;
+    }
+    uint16_t next = get16(buf, (seek->cluster & 0xFF) * 2);
+    if(next < 2 || next > fat16_volume.max_cluster) return 0;
+    seek->cluster = next;
+    seek->index++;
+  }
+  *sector = fat16_cluster_sector(seek->cluster) + index % fat16_volume.cluster_sectors;
+  return 1;
+}

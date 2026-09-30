@@ -15,8 +15,8 @@
 #define RECORD_CREATE_DATE      16
 #define RECORD_ACCESS_DATE      18
 #define RECORD_WRITE_DATE       24
-// FAT date: (year - 1980) << 9 | month << 5 | day
-#define DEFAULT_DATE            ((2020 - 1980) << 9 | 1 << 5 | 1)
+// FAT date: (year - 1980) << 9 | month << 5 | day, 01.01.1980 is the earliest
+#define DEFAULT_DATE            ((1980 - 1980) << 9 | 1 << 5 | 1)
 #define ATTR_ARCHIVE            0x20    // usual file
 
 // the first free cluster is searched from here
@@ -283,38 +283,6 @@ static void init_record(const uint8_t *raw, uint8_t attr){
   put16(record, RECORD_WRITE_DATE, DEFAULT_DATE);
 }
 
-// new chain with size bytes of data (in RAM, not in buf), first is 0 if empty
-static uint8_t write_chain(const uint8_t *data, uint32_t size, uint16_t *first, uint8_t *buf){
-  uint16_t prev = 0;
-  uint32_t done = 0;
-  *first = 0;
-
-  while(done < size){
-    uint16_t cluster;
-    uint8_t error = alloc_cluster(prev, &cluster, buf);
-    if(error) return error;
-    if(!*first) *first = cluster;
-
-    uint32_t sector = fat16_cluster_sector(cluster);
-    for(uint8_t i = 0; i < fat16_volume.cluster_sectors && done < size; i++){
-      const uint8_t *src = data + done;
-      uint32_t len = size - done;
-      if(len >= SD_SECTOR_SIZE){
-        len = SD_SECTOR_SIZE;
-      }else{
-        // the last sector: the rest is zero
-        memset(buf, 0, SD_SECTOR_SIZE);
-        memcpy(buf, src, len);
-        src = buf;
-      }
-      if(!sd_write_sector(sector + i, src)) return FAT16_ERROR_IO;
-      done += len;
-    }
-    prev = cluster;
-  }
-  return FAT16_OK;
-}
-
 /******************************** public *************************************/
 
 // the record of entry is still on its place with the same name and data
@@ -462,32 +430,124 @@ uint8_t fat16_mkdir(uint16_t dir_cluster, const uint8_t *raw, uint8_t *buf){
   return new_dir(dir_cluster, record, &cluster, buf);
 }
 
+/****************************** file writing *********************************/
+
+// sequential writing of a new chain by sectors
+void fat16_writer_open(fat16_writer_t *writer){
+  writer->first = 0;
+  writer->cluster = 0;
+  writer->sector = fat16_volume.cluster_sectors;
+}
+
+// take the cluster for the next sector: after it buf can be filled with data
+uint8_t fat16_writer_prepare(fat16_writer_t *writer, uint8_t *buf){
+  if(writer->sector < fat16_volume.cluster_sectors) return FAT16_OK;
+  uint16_t cluster;
+  uint8_t error = alloc_cluster(writer->cluster, &cluster, buf);
+  if(error) return error;
+  if(!writer->first) writer->first = cluster;
+  writer->cluster = cluster;
+  writer->sector = 0;
+  return FAT16_OK;
+}
+
+// append 512 bytes of data (buf only after fat16_writer_prepare)
+uint8_t fat16_writer_sector(fat16_writer_t *writer, const uint8_t *data, uint8_t *buf){
+  uint8_t error = fat16_writer_prepare(writer, buf);
+  if(error) return error;
+  if(!sd_write_sector(fat16_cluster_sector(writer->cluster) + writer->sector, data)) return FAT16_ERROR_IO;
+  writer->sector++;
+  return FAT16_OK;
+}
+
+uint8_t fat16_free(uint16_t first, uint8_t *buf){
+  return free_chain(first, buf);
+}
+
+// new cluster after the last one of a chain (0 - a new chain)
+uint8_t fat16_chain_append(uint16_t last, uint16_t *cluster, uint8_t *buf){
+  return alloc_cluster(last, cluster, buf);
+}
+
+// the record of the file gets the chain and the size, old - its old chain
+uint8_t fat16_set_data(fat16_entry_t *entry, uint16_t first, uint32_t size,
+                       uint16_t *old, uint8_t *buf){
+  if(!sd_read_sector(entry->record_sector, buf)) return FAT16_ERROR_IO;
+  uint8_t *rec = buf + entry->record_offset;
+  if(old) *old = get16(rec, FAT16_CLUSTER_OFFSET);
+  put16(rec, FAT16_CLUSTER_OFFSET, first);
+  put32(rec, FAT16_SIZE_OFFSET, size);
+  if(!sd_write_sector(entry->record_sector, buf)) return FAT16_ERROR_IO;
+  entry->cluster = first;
+  entry->size = size;
+  return FAT16_OK;
+}
+
+// the file gets the new chain, the old one is freed
+uint8_t fat16_replace_data(fat16_entry_t *entry, uint16_t first, uint32_t size, uint8_t *buf){
+  uint16_t old;
+  uint8_t error = fat16_set_data(entry, first, size, &old, buf);
+  if(error) return error;
+  return free_chain(old, buf);
+}
+
+uint8_t fat16_name_exists(uint16_t dir_cluster, const uint8_t *raw, uint8_t *buf){
+  return name_exists(dir_cluster, raw, 0, 0, buf);
+}
+
+// new record of a file with raw name (8 + 3 chars with spaces) for the chain,
+// entry gets the new file
+uint8_t fat16_add_file(uint16_t dir_cluster, const uint8_t *raw, uint16_t first,
+                       uint32_t size, fat16_entry_t *entry, uint8_t *buf){
+  free_ctx_t place;
+
+  if(name_exists(dir_cluster, raw, 0, 0, buf)) return FAT16_ERROR_EXISTS;
+  init_record(raw, ATTR_ARCHIVE);
+  put16(record, FAT16_CLUSTER_OFFSET, first);
+  put32(record, FAT16_SIZE_OFFSET, size);
+  uint8_t error = dir_add(dir_cluster, record, buf, &place);
+  if(error) return error;
+
+  fat16_entry_from_record(entry, record);
+  entry->dir_cluster = dir_cluster;
+  entry->record_sector = place.sector;
+  entry->record_offset = place.offset;
+  return FAT16_OK;
+}
+
+// new chain with size bytes of data (in RAM, not in buf)
+static uint8_t write_chain(const uint8_t *data, uint32_t size, uint16_t *first, uint8_t *buf){
+  fat16_writer_t writer;
+  uint8_t error = FAT16_OK;
+
+  fat16_writer_open(&writer);
+  for(uint32_t done = 0; done < size && !error; done += SD_SECTOR_SIZE){
+    if(size - done >= SD_SECTOR_SIZE){
+      error = fat16_writer_sector(&writer, data + done, buf);
+    }else if(!(error = fat16_writer_prepare(&writer, buf))){
+      // the last sector: the rest is zero
+      memset(buf, 0, SD_SECTOR_SIZE);
+      memcpy(buf, data + done, size - done);
+      error = fat16_writer_sector(&writer, buf, buf);
+    }
+  }
+  *first = writer.first;
+  return error;
+}
+
 // replace data of the file with size bytes of data (in RAM, not in buf):
 // data goes to a new chain, then the record is changed and the old chain
 // is freed, so the old data stays if the write fails
 uint8_t fat16_write_file(fat16_entry_t *entry, const uint8_t *data, uint32_t size, uint8_t *buf){
   uint16_t first;
+  uint16_t old;
   uint8_t error = write_chain(data, size, &first, buf);
+  // the new chain is freed only while the record does not use it
+  if(!error) error = fat16_set_data(entry, first, size, &old, buf);
   if(error){
     free_chain(first, buf);
     return error;
   }
-
-  if(!sd_read_sector(entry->record_sector, buf)){
-    free_chain(first, buf);
-    return FAT16_ERROR_IO;
-  }
-  uint8_t *rec = buf + entry->record_offset;
-  uint16_t old = get16(rec, FAT16_CLUSTER_OFFSET);
-  put16(rec, FAT16_CLUSTER_OFFSET, first);
-  put32(rec, FAT16_SIZE_OFFSET, size);
-  if(!sd_write_sector(entry->record_sector, buf)){
-    free_chain(first, buf);
-    return FAT16_ERROR_IO;
-  }
-
-  entry->cluster = first;
-  entry->size = size;
   return free_chain(old, buf);
 }
 
@@ -495,27 +555,39 @@ uint8_t fat16_write_file(fat16_entry_t *entry, const uint8_t *data, uint32_t siz
 // bytes of data (in RAM, not in buf), entry gets the new file
 uint8_t fat16_create_file(uint16_t dir_cluster, const uint8_t *raw, const uint8_t *data,
                           uint32_t size, fat16_entry_t *entry, uint8_t *buf){
-  free_ctx_t place;
   uint16_t first;
-  uint8_t error;
 
   if(name_exists(dir_cluster, raw, 0, 0, buf)) return FAT16_ERROR_EXISTS;
+  uint8_t error = write_chain(data, size, &first, buf);
+  if(!error) error = fat16_add_file(dir_cluster, raw, first, size, entry, buf);
+  if(error) free_chain(first, buf);
+  return error;
+}
 
-  error = write_chain(data, size, &first, buf);
-  if(!error){
-    init_record(raw, ATTR_ARCHIVE);
-    put16(record, FAT16_CLUSTER_OFFSET, first);
-    put32(record, FAT16_SIZE_OFFSET, size);
-    error = dir_add(dir_cluster, record, buf, &place);
-  }
-  if(error){
-    free_chain(first, buf);
-    return error;
-  }
+typedef struct {
+  const uint8_t *raw;
+  uint16_t dir;
+  fat16_entry_t *entry;
+  uint8_t found;
+} search_ctx_t;
 
-  fat16_entry_from_record(entry, record);
-  entry->dir_cluster = dir_cluster;
-  entry->record_sector = place.sector;
-  entry->record_offset = place.offset;
-  return FAT16_OK;
+static uint8_t search_visit(const uint8_t *rec, uint32_t sector, uint16_t offset, void *ctx){
+  search_ctx_t *search = ctx;
+  uint8_t attr = rec[FAT16_ATTR_OFFSET];
+  if(rec[0] == FAT16_RECORD_END) return 0;
+  if(rec[0] == FAT16_RECORD_DELETED || attr == FAT16_ATTR_LFN || (attr & FAT16_ATTR_VOLUME_ID)) return 1;
+  if(memcmp(rec, search->raw, FAT16_RAW_NAME_SIZE)) return 1;
+  fat16_entry_from_record(search->entry, rec);
+  search->entry->dir_cluster = search->dir;
+  search->entry->record_sector = sector;
+  search->entry->record_offset = offset;
+  search->found = 1;
+  return 0;
+}
+
+// entry with raw name (8 + 3 chars with spaces) in directory, returns 1 if found
+uint8_t fat16_find(uint16_t dir_cluster, const uint8_t *raw, fat16_entry_t *entry, uint8_t *buf){
+  search_ctx_t search = {raw, dir_cluster, entry, 0};
+  fat16_dir_walk(dir_cluster, buf, search_visit, &search);
+  return search.found;
 }
