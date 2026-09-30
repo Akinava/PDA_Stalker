@@ -1,9 +1,9 @@
 #=======================================
 
 # Name of the project
-TARGET = file_manager
-# file name on SD card: ../../sd/APPS/$(APP_NAME).BIN
-APP_NAME = FM
+TARGET = text_editor
+# file name on SD card: ../../../sd/APPS/$(APP_NAME).BIN
+APP_NAME = TEDIT
 
 # tipe of MK
 MCU  = atmega328p
@@ -13,14 +13,16 @@ F_CPU   = 16000000
 # programmer
 AVRDUDE_PROGRAMMER = usbasp
 
-LIB_DIR = ../lib
-BOOT_DIR = ../bootloader
-SD_APPS_DIR = ../../sd/APPS
+LIB_DIR = ../../lib
+BOOT_DIR = ../../bootloader
+SD_APPS_DIR = ../../../sd/APPS
 BUILD_DIR = build
 
 SOURCES = main.c
 SOURCES += $(LIB_DIR)/spi.c
 SOURCES += $(LIB_DIR)/display.c
+SOURCES += $(LIB_DIR)/display_gfx.c
+SOURCES += $(LIB_DIR)/utf8.c
 SOURCES += $(LIB_DIR)/keys.c
 SOURCES += $(LIB_DIR)/radio.c
 SOURCES += $(LIB_DIR)/sd.c
@@ -28,6 +30,7 @@ SOURCES += $(LIB_DIR)/fat16_dir.c
 SOURCES += $(LIB_DIR)/fat16_edit.c
 SOURCES += $(LIB_DIR)/file_browser.c
 SOURCES += $(LIB_DIR)/name_edit.c
+SOURCES += $(LIB_DIR)/menu.c
 SOURCES += $(LIB_DIR)/loader.c
 #=======================================
 
