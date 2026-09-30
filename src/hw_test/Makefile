@@ -1,9 +1,9 @@
 #=======================================
 
 # Name of the project
-TARGET = test
+TARGET = hw_test
 # file name on SD card: ../../sd/BIN/$(APP_NAME).BIN
-APP_NAME = TEST
+APP_NAME = HWTEST
 
 # tipe of MK
 MCU  = atmega328p
