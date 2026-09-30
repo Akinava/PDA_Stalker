@@ -1,0 +1,23 @@
+#include <util/delay.h>
+#include "menu.h"
+#include "display.h"
+#include "keys.h"
+#include "loader.h"
+
+#define MENU_POLL_INTERVAL_MS 20
+
+void menu_exit_app(void){
+  uint8_t key;
+
+  display_print_line(1, "   EXIT APP?");
+  display_print_line(2, "   C - yes");
+  while((key = keys_get_press()) == NOOP){
+    _delay_ms(MENU_POLL_INTERVAL_MS);
+  }
+
+  if(key == C_KEY_PRESSED && loader_is_present()){
+    display_print_line(1, "   loading...");
+    display_print_line(2, "");
+    loader_load_default_app();
+  }
+}

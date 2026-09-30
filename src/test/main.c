@@ -91,7 +91,13 @@ static void test_button(void){
   uint8_t shown_key = NOOP;
   while(1){
     uint8_t key = keys_read();
-    if(key == C_KEY_PRESSED) return;
+    if(key == C_KEY_PRESSED){
+      // wait for release, otherwise the main menu takes this C as a new press
+      while(keys_read() != NOOP){
+        _delay_ms(POLL_INTERVAL_MS);
+      }
+      return;
+    }
     if(key != shown_key){
       display_print_line(1, key == NOOP ? "" : key_names[key]);
       shown_key = key;
@@ -284,6 +290,10 @@ int main(void){
       case A_KEY_PRESSED:
         menu[selected].run();
         display_clear();
+        draw_menu();
+        break;
+      case C_KEY_PRESSED:
+        menu_exit_app();
         draw_menu();
         break;
     }

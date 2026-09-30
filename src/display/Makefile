@@ -19,6 +19,9 @@ SD_BIN_DIR = ../../sd/BIN
 BUILD_DIR = build
 
 SOURCES = main.c
+SOURCES += $(LIB_DIR)/loader.c
+SOURCES += $(LIB_DIR)/menu.c
+SOURCES += $(LIB_DIR)/keys.c
 SOURCES += $(LIB_DIR)/spi.c
 SOURCES += $(LIB_DIR)/display.c
 SOURCES += $(LIB_DIR)/led.c

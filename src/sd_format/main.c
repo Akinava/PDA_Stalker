@@ -42,6 +42,16 @@ static uint8_t wait_key(void){
   return key;
 }
 
+// A - retry, C - exit app window; after the window the card is scanned again
+static void wait_retry(void){
+  while(1){
+    switch(wait_key()){
+      case A_KEY_PRESSED: return;
+      case C_KEY_PRESSED: menu_exit_app(); return;
+    }
+  }
+}
+
 static void draw_progress(uint8_t percent){
   char line[DISPLAY_COLS + 1];
   draw_screen("formatting...", format_value(line, "", percent, " %"), "do not remove", "the card");
@@ -63,14 +73,14 @@ static uint8_t card_info(void){
 
   if(!card_sectors){
     draw_screen("SD init error", "insert the card", "", "A - retry");
-    while(wait_key() != A_KEY_PRESSED);
+    wait_retry();
     return 0;
   }
 
   format_value(line, "card ", card_sectors / SECTORS_PER_MB, " MB");
   if(!fat16_layout(card_sectors, &layout)){
     draw_screen(line, type_names[type], "too small", "A - retry");
-    while(wait_key() != A_KEY_PRESSED);
+    wait_retry();
     return 0;
   }
 
@@ -79,6 +89,8 @@ static uint8_t card_info(void){
     switch(wait_key()){
       case A_KEY_PRESSED: return 1;
       case B_KEY_PRESSED: return 0;
+      // window closed: card is scanned and the screen is drawn again
+      case C_KEY_PRESSED: menu_exit_app(); return 0;
     }
   }
 }

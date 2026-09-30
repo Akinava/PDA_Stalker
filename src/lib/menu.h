@@ -11,4 +11,8 @@
 #define LEFT_KEY_PRESSED    6
 #define RIGHT_KEY_PRESSED   7
 
+// modal "EXIT APP?" window on rows 1-2: C loads the default app (file manager),
+// any other key closes the window, then the caller redraws the screen
+void menu_exit_app(void);
+
 #endif
