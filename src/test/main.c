@@ -68,11 +68,14 @@ static void test_button(void){
   display_clear();
   display_print_line(0, "press any button");
 
+  // name is shown while the key is held, redraw only on change
+  uint8_t shown_key = NOOP;
   while(1){
-    uint8_t key = keys_get_press();
+    uint8_t key = keys_read();
     if(key == C_KEY_PRESSED) return;
-    if(key != NOOP){
-      display_print_line(1, key_names[key]);
+    if(key != shown_key){
+      display_print_line(1, key == NOOP ? "" : key_names[key]);
+      shown_key = key;
     }
     _delay_ms(POLL_INTERVAL_MS);
   }
