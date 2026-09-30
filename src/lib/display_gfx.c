@@ -244,6 +244,13 @@ void display_gfx_clear(void){
   }
 }
 
+void display_gfx_line(uint8_t y, const uint8_t *bytes){
+  set_address(y);
+  for(uint8_t i = 0; i < GFX_LINE_BYTES; i++){
+    display_send_data(bytes[i]);
+  }
+}
+
 // text row: len chars of text (the rest is empty), cell cursor is inverted,
 // invert - the whole row is inverted
 void display_gfx_row(uint8_t row, const char *text, uint8_t len, uint8_t cursor, uint8_t invert){

@@ -31,6 +31,8 @@ void display_gfx_on(void);
 void display_gfx_off(void);
 void display_gfx_clear(void);
 uint8_t display_gfx_glyph(uint16_t code);
+// one pixel line of 128 pixels (16 bytes, the high bit is the left pixel)
+void display_gfx_line(uint8_t y, const uint8_t *bytes);
 void display_gfx_row(uint8_t row, const char *text, uint8_t len, uint8_t cursor, uint8_t invert);
 
 #endif
