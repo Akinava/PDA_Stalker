@@ -3,7 +3,7 @@
 # Name of the project
 TARGET = text_editor
 # file name on SD card: ../../sd/BIN/$(APP_NAME).BIN
-APP_NAME = EDIT
+APP_NAME = TEDIT
 
 # tipe of MK
 MCU  = atmega328p
