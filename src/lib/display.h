@@ -43,5 +43,6 @@ void display_set_cursor(uint8_t row, uint8_t col);
 void display_putc(char c);
 void display_print(const char *str);
 void display_print_at(uint8_t row, uint8_t col, const char *str);
+void display_print_line(uint8_t row, const char *str);
 
 #endif

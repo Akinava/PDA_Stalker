@@ -73,3 +73,15 @@ void display_print_at(uint8_t row, uint8_t col, const char *str){
   display_set_cursor(row, col);
   display_print(str);
 }
+
+// print str on the whole line, the rest of the line is filled with spaces
+void display_print_line(uint8_t row, const char *str){
+  uint8_t col = 0;
+  display_set_cursor(row, 0);
+  for(; *str && col < DISPLAY_COLS; col++){
+    display_putc(*str++);
+  }
+  for(; col < DISPLAY_COLS; col++){
+    display_putc(' ');
+  }
+}
