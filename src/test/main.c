@@ -6,6 +6,7 @@
 #include "vibro.h"
 #include "mic.h"
 #include "speaker.h"
+#include "radio.h"
 
 // keys polling interval, also debounce time
 #define POLL_INTERVAL_MS 20
@@ -22,6 +23,7 @@ static void test_led(void);
 static void test_vibro(void);
 static void test_mic(void);
 static void test_speaker(void);
+static void test_radio(void);
 
 typedef struct {
   const char *name;
@@ -34,6 +36,7 @@ static const menu_item_t menu[] = {
   {"test vibro",  test_vibro},
   {"test mic",    test_mic},
   {"test speaker", test_speaker},
+  {"test NRF24L01", test_radio},
 };
 #define MENU_SIZE (sizeof(menu) / sizeof(menu[0]))
 
@@ -191,11 +194,41 @@ static void test_speaker(void){
   }
 }
 
+// "NAME  0xHH" register line
+static void draw_register(uint8_t row, const char *name, uint8_t value){
+  static const char hex[] = "0123456789ABCDEF";
+  char line[DISPLAY_COLS + 1];
+  uint8_t len = 0;
+  while(*name && len < DISPLAY_COLS - 5) line[len++] = *name++;
+  line[len++] = ' ';
+  line[len++] = '0';
+  line[len++] = 'x';
+  line[len++] = hex[value >> 4];
+  line[len++] = hex[value & 0x0F];
+  line[len] = '\0';
+  display_print_line(row, line);
+}
+
+static void test_radio(void){
+  display_clear();
+  if(radio_is_present()){
+    display_print_line(0, "NRF24L01 OK");
+  }else{
+    display_print_line(0, "NRF24L01 error");
+  }
+  draw_register(1, "STATUS", radio_read_register(RADIO_STATUS));
+  draw_register(2, "CONFIG", radio_read_register(RADIO_CONFIG));
+  display_print_line(3, "C - back");
+  wait_back();
+}
+
 int main(void){
   init_keys();
   init_led();
   init_vibro();
   init_speaker();
+  // CSN high before any SPI traffic, otherwise radio catches display data
+  init_radio();
   init_display();
   init_mic();
   draw_menu();

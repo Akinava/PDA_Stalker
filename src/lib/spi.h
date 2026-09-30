@@ -17,7 +17,16 @@
 #define SPI_SET SET_LOW
 #define SPI_UNSET SET_HIGH
 
+// SPI modes (CPOL CPHA): devices on the bus need different modes,
+// so set the mode before each transaction
+#define SPI_MODE0 0                         // NRF24L01, SD card
+#define SPI_MODE1 _BV(CPHA)
+#define SPI_MODE2 _BV(CPOL)
+#define SPI_MODE3 (_BV(CPOL)|_BV(CPHA))     // ST7920
+
 void init_spi(void);
 void spi_send(uint8_t data);
+uint8_t spi_transfer(uint8_t data);
+void spi_set_mode(uint8_t mode);
 
 #endif

@@ -6,6 +6,8 @@
 #define DISPLAY_CLEAR_DELAY_MS   2
 
 static void display_send(uint8_t sync, uint8_t byte){
+  // ST7920 works in SPI mode 3: SCK is high when idle, sample on rising edge
+  spi_set_mode(SPI_MODE3);
   SET_HIGH(LCD_PORT, LCD_CS);
   spi_send(sync);
   spi_send(byte & 0xF0);  // high nibble
@@ -26,8 +28,6 @@ void init_display(void){
   SET_DDR_OUT(LCD_DDR, LCD_CS);
   SET_LOW(LCD_PORT, LCD_CS);
   init_spi();
-  // ST7920 works in SPI mode 3: SCK is high when idle, sample on rising edge
-  SPCR |= _BV(CPOL)|_BV(CPHA);
 
   // wait for display power on
   _delay_ms(100);

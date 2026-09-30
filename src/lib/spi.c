@@ -35,3 +35,13 @@ void spi_send(uint8_t data){
   SPDR = data;
   while(!(SPSR & (1<<SPIF)));
 }
+
+// send byte and return the byte received at the same time
+uint8_t spi_transfer(uint8_t data){
+  spi_send(data);
+  return SPDR;
+}
+
+void spi_set_mode(uint8_t mode){
+  SPCR = (SPCR & ~(_BV(CPOL)|_BV(CPHA))) | mode;
+}
