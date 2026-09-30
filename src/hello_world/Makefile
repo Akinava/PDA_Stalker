@@ -36,6 +36,8 @@ CFLAGS += $(CDEFS)
 CFLAGS += -I$(LIB_DIR)
 # generate header dependencies
 CFLAGS += -MMD -MP
+# every function and data in own section: the linker drops unused ones
+CFLAGS += -ffunction-sections -fdata-sections
 
 CC = avr-gcc
 OBJCOPY = avr-objcopy
@@ -44,6 +46,7 @@ SIZE = avr-size
 AVRDUDE = avrdude
 
 COMPILE = $(CC) $(CFLAGS) -mmcu=$(MCU)
+LDFLAGS = -Wl,--gc-sections
 
 AVRDUDE_FLAGS = -p $(MCU) -c $(AVRDUDE_PROGRAMMER)
 
@@ -64,7 +67,7 @@ $(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
 	$(COMPILE) -c $< -o $@
 
 $(TARGET).elf: $(OBJECTS)
-	$(COMPILE) -o $@ $(OBJECTS)
+	$(COMPILE) $(LDFLAGS) -o $@ $(OBJECTS)
 	$(OBJDUMP) -D $@ > $(TARGET).asm
 
 $(TARGET).hex: $(TARGET).elf
