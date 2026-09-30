@@ -43,12 +43,12 @@ VCC - 2N2222 - (+ vibro motor -) - GND
 GND - resistor(200Ω) - LED - PD0
 
 === NRF24L01
-             +--+--------------+
-(GND)  GND - |**| - VCC  (VCC) |
-(PD4)   CE - |**| - CSN  (PC3) |----+
-(PB5)  SCK - |**| - MOSI (PB3) |----+
-(PB4) MISO - |**| - IRQ        |
-             +--+--------------+
+             +--+-------------------+
+(GND)  GND - |**| - VCC  (VCC)      |
+(PD4)   CE - |**| - CSN  (PC3)      |--------------------+
+(PB5)  SCK - |**| - MOSI (PB3)      |--------------------+
+(PB4) MISO - |**| - IRQ             |
+             +--+-------------------+
 
 === Crystal
 GND + capacitor(22pF) --------+--------- OSC1
