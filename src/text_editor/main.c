@@ -72,7 +72,7 @@ static const char group_other[] PROGMEM = " \n\t.,:;!?-+*/=()[]{}<>'\"#$%&@^_`|~
 static const char *const groups[] PROGMEM = {group_upper, group_lower, group_digit, group_other};
 #define GROUPS (sizeof(groups) / sizeof(groups[0]))
 
-// temp file "~TEXTED.TMP" in the root directory
+// temp file "/TMP/~TEXTED.TMP"
 static const uint8_t temp_name[FAT16_RAW_NAME_SIZE] PROGMEM = "~TEXTED TMP";
 
 static uint8_t sector[SD_SECTOR_SIZE];
@@ -279,9 +279,11 @@ static void document_clear(void){
 // the old temp file is deleted, the new one is empty
 static uint8_t temp_create(void){
   uint8_t raw[FAT16_RAW_NAME_SIZE];
+  uint16_t dir;
   memcpy_P(raw, temp_name, sizeof(raw));
-  if(fat16_find(FAT16_ROOT_CLUSTER, raw, &temp, sector) && fat16_delete(&temp, sector)) return 0;
-  if(fat16_create_file(FAT16_ROOT_CLUSTER, raw, NULL, 0, &temp, sector)) return 0;
+  if(fat16_tmp_dir(&dir, sector)) return 0;
+  if(fat16_find(dir, raw, &temp, sector) && fat16_delete(&temp, sector)) return 0;
+  if(fat16_create_file(dir, raw, NULL, 0, &temp, sector)) return 0;
   temp_last = 0;
   temp_clusters = 0;
   temp_seek.cluster = 0;
@@ -836,6 +838,7 @@ static void show_error(uint8_t error){
     [FAT16_ERROR_SAME_DIR] = "same directory",
     [FAT16_ERROR_INSIDE]   = "into itself",
     [FAT16_ERROR_DEPTH]    = "too deep dirs",
+    [FAT16_ERROR_NOT_DIR]  = "not a directory",
   };
   if(error) message(texts[error], NULL);
 }

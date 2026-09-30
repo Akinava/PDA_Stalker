@@ -1,4 +1,5 @@
 #include <string.h>
+#include <avr/pgmspace.h>
 #include "fat16_edit.h"
 
 #define FAT_FREE                0x0000
@@ -590,4 +591,21 @@ uint8_t fat16_find(uint16_t dir_cluster, const uint8_t *raw, fat16_entry_t *entr
   search_ctx_t search = {raw, dir_cluster, entry, 0};
   fat16_dir_walk(dir_cluster, buf, search_visit, &search);
   return search.found;
+}
+
+// cluster of the directory /TMP for temp files, it is created if there is none
+uint8_t fat16_tmp_dir(uint16_t *cluster, uint8_t *buf){
+  static const uint8_t name[FAT16_RAW_NAME_SIZE] PROGMEM = "TMP        ";
+  uint8_t raw[FAT16_RAW_NAME_SIZE];
+  fat16_entry_t dir;
+
+  memcpy_P(raw, name, sizeof(raw));
+  if(!fat16_find(FAT16_ROOT_CLUSTER, raw, &dir, buf)){
+    uint8_t error = fat16_mkdir(FAT16_ROOT_CLUSTER, raw, buf);
+    if(error) return error;
+    if(!fat16_find(FAT16_ROOT_CLUSTER, raw, &dir, buf)) return FAT16_ERROR_IO;
+  }
+  if(!fat16_is_dir(&dir)) return FAT16_ERROR_NOT_DIR;
+  *cluster = dir.cluster;
+  return FAT16_OK;
 }

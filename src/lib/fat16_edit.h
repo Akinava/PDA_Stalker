@@ -21,6 +21,7 @@
 #define FAT16_ERROR_SAME_DIR    5       // move to the same directory
 #define FAT16_ERROR_INSIDE      6       // directory to itself or to its subdirectory
 #define FAT16_ERROR_DEPTH       7       // too deep directories
+#define FAT16_ERROR_NOT_DIR     8       // a file has the name of the directory
 
 // raw name: 8 + 3 chars with spaces, no dot
 #define FAT16_RAW_NAME_SIZE     (FAT16_NAME_SIZE + FAT16_EXT_SIZE)
@@ -37,6 +38,8 @@ uint8_t fat16_create_file(uint16_t dir_cluster, const uint8_t *raw, const uint8_
                           uint32_t size, fat16_entry_t *entry, uint8_t *buf);
 uint8_t fat16_find(uint16_t dir_cluster, const uint8_t *raw, fat16_entry_t *entry, uint8_t *buf);
 uint8_t fat16_name_exists(uint16_t dir_cluster, const uint8_t *raw, uint8_t *buf);
+// directory /TMP for temp files, it is created if there is none
+uint8_t fat16_tmp_dir(uint16_t *cluster, uint8_t *buf);
 
 // big files: data by sectors to a new chain, then the chain goes to a file
 typedef struct {
