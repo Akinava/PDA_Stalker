@@ -12,8 +12,10 @@
 // commands
 #define SD_CMD0                 0       // GO_IDLE_STATE
 #define SD_CMD8                 8       // SEND_IF_COND
+#define SD_CMD9                 9       // SEND_CSD
 #define SD_CMD16                16      // SET_BLOCKLEN
 #define SD_CMD17                17      // READ_SINGLE_BLOCK
+#define SD_CMD24                24      // WRITE_BLOCK
 #define SD_CMD55                55      // APP_CMD
 #define SD_CMD58                58      // READ_OCR
 #define SD_ACMD41               41      // SD_SEND_OP_COND
@@ -24,6 +26,8 @@
 #define SD_R1_ILLEGAL_COMMAND   0x04
 
 #define SD_DATA_START_BLOCK     0xFE
+#define SD_DATA_RESPONSE_MASK   0x1F
+#define SD_DATA_ACCEPTED        0x05
 
 // card types, result of sd_init_card
 #define SD_TYPE_NONE            0       // no card or init error
@@ -38,5 +42,7 @@
 void init_sd(void);
 uint8_t sd_init_card(void);
 uint8_t sd_read_sector(uint32_t sector, uint8_t *buf);
+uint8_t sd_write_sector(uint32_t sector, const uint8_t *buf);
+uint32_t sd_get_sectors(void);
 
 #endif

@@ -5,6 +5,9 @@
 #define SD_INIT_TIMEOUT_MS      1000
 #define SD_RESPONSE_RETRY       10
 #define SD_READ_RETRY           50000
+// ~32 us per byte at 250 kHz SPI: ~1.6 s, write takes up to 250 ms
+#define SD_WRITE_RETRY          50000
+#define SD_CSD_SIZE             16
 
 static uint8_t card_type = SD_TYPE_NONE;
 
@@ -119,29 +122,63 @@ error:
   return SD_TYPE_NONE;
 }
 
-// read 512 bytes of sector to buf, returns 1 on success
-uint8_t sd_read_sector(uint32_t sector, uint8_t *buf){
-  if(card_type == SD_TYPE_NONE) return 0;
-  // byte addressing for not SDHC cards
-  uint32_t address = card_type == SD_TYPE_SDHC ? sector : sector * SD_SECTOR_SIZE;
-
-  sd_select();
-  if(sd_command(SD_CMD17, address) != SD_R1_READY) goto error;
-
-  // wait for data token
+// wait for data token and read len bytes of data block, CS must be low
+static uint8_t sd_read_data(uint8_t *buf, uint16_t len){
   uint8_t token;
   uint16_t retry = SD_READ_RETRY;
   do{
     token = spi_transfer(0xFF);
   }while(token == 0xFF && --retry);
-  if(token != SD_DATA_START_BLOCK) goto error;
+  if(token != SD_DATA_START_BLOCK) return 0;
 
-  for(uint16_t i = 0; i < SD_SECTOR_SIZE; i++){
+  for(uint16_t i = 0; i < len; i++){
     buf[i] = spi_transfer(0xFF);
   }
   // CRC is not used
   spi_send(0xFF);
   spi_send(0xFF);
+  return 1;
+}
+
+// byte addressing for not SDHC cards
+static uint32_t sd_address(uint32_t sector){
+  return card_type == SD_TYPE_SDHC ? sector : sector * SD_SECTOR_SIZE;
+}
+
+// read 512 bytes of sector to buf, returns 1 on success
+uint8_t sd_read_sector(uint32_t sector, uint8_t *buf){
+  if(card_type == SD_TYPE_NONE) return 0;
+
+  sd_select();
+  uint8_t ok = sd_command(SD_CMD17, sd_address(sector)) == SD_R1_READY
+            && sd_read_data(buf, SD_SECTOR_SIZE);
+  sd_unselect();
+  return ok;
+}
+
+// write 512 bytes of buf to sector, returns 1 on success
+uint8_t sd_write_sector(uint32_t sector, const uint8_t *buf){
+  if(card_type == SD_TYPE_NONE) return 0;
+
+  sd_select();
+  if(sd_command(SD_CMD24, sd_address(sector)) != SD_R1_READY) goto error;
+
+  spi_send(0xFF);
+  spi_send(SD_DATA_START_BLOCK);
+  for(uint16_t i = 0; i < SD_SECTOR_SIZE; i++){
+    spi_send(buf[i]);
+  }
+  // CRC is not used
+  spi_send(0xFF);
+  spi_send(0xFF);
+
+  if((spi_transfer(0xFF) & SD_DATA_RESPONSE_MASK) != SD_DATA_ACCEPTED) goto error;
+
+  // card holds MISO low while it is busy with writing
+  uint16_t retry = SD_WRITE_RETRY;
+  while(spi_transfer(0xFF) != 0xFF){
+    if(!--retry) goto error;
+  }
 
   sd_unselect();
   return 1;
@@ -149,4 +186,27 @@ uint8_t sd_read_sector(uint32_t sector, uint8_t *buf){
 error:
   sd_unselect();
   return 0;
+}
+
+// card size in 512 byte sectors from CSD register, 0 on error
+uint32_t sd_get_sectors(void){
+  uint8_t csd[SD_CSD_SIZE];
+  if(card_type == SD_TYPE_NONE) return 0;
+
+  sd_select();
+  uint8_t ok = sd_command(SD_CMD9, 0) == SD_R1_READY
+            && sd_read_data(csd, SD_CSD_SIZE);
+  sd_unselect();
+  if(!ok) return 0;
+
+  if((csd[0] >> 6) == 1){
+    // CSD v2 (SDHC / SDXC): size = (C_SIZE + 1) * 512 KB
+    uint32_t c_size = ((uint32_t)(csd[7] & 0x3F) << 16) | ((uint16_t)csd[8] << 8) | csd[9];
+    return (c_size + 1) << 10;
+  }
+  // CSD v1: size = (C_SIZE + 1) * 2^(C_SIZE_MULT + 2) * 2^READ_BL_LEN
+  uint8_t read_bl_len = csd[5] & 0x0F;
+  uint16_t c_size = ((uint16_t)(csd[6] & 0x03) << 10) | ((uint16_t)csd[7] << 2) | (csd[8] >> 6);
+  uint8_t c_size_mult = ((csd[9] & 0x03) << 1) | (csd[10] >> 7);
+  return (uint32_t)(c_size + 1) << (c_size_mult + 2 + read_bl_len - 9);
 }
