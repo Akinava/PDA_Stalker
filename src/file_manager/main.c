@@ -8,6 +8,7 @@
 #include "fat16_dir.h"
 #include "fat16_edit.h"
 #include "file_browser.h"
+#include "name_edit.h"
 #include "loader.h"
 
 // keys polling interval, also debounce time
@@ -27,11 +28,6 @@
 #define ACTION_MKDIR  5
 #define ACTIONS       6
 #define ACTION_NONE   0xFF
-
-// chars of short (8.3) names for rename, space is the end of name
-#define NAME_CHARS " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-~!#$%&'()@^{}"
-// "[NAME    .EXT]": name from column 1, ext from column 10
-#define NAME_FIELD_COL 1
 
 static uint8_t sector[SD_SECTOR_SIZE];
 static uint8_t card_type;
@@ -254,88 +250,13 @@ static void delete(const fat16_entry_t *entry){
   show_error(fat16_delete(entry, sector));
 }
 
-static void draw_name_field(const uint8_t *raw, uint8_t pos){
-  char line[DISPLAY_COLS + 1];
-  char *p = line;
-  *p++ = '[';
-  memcpy(p, raw, FAT16_NAME_SIZE);
-  p += FAT16_NAME_SIZE;
-  *p++ = '.';
-  memcpy(p, raw + FAT16_NAME_SIZE, FAT16_EXT_SIZE);
-  p += FAT16_EXT_SIZE;
-  *p++ = ']';
-  *p = '\0';
-  display_print_line(1, line);
-
-  // '^' under the char, the dot is skipped
-  uint8_t col = NAME_FIELD_COL + pos + (pos >= FAT16_NAME_SIZE);
-  memset(line, ' ', col);
-  line[col] = '^';
-  line[col + 1] = '\0';
-  display_print_line(2, line);
-}
-
-// remove spaces inside name and ext: "A B" -> "AB "
-static void pack_name(uint8_t *part, uint8_t size){
-  uint8_t len = 0;
-  for(uint8_t i = 0; i < size; i++){
-    if(part[i] != ' ') part[len++] = part[i];
-  }
-  memset(part + len, ' ', size - len);
-}
-
-// editor of 8.3 name, title is in flash, raw is the start name and the result:
-// UP / DOWN - char, LEFT / RIGHT - position, A - ok, C - cancel.
-// returns 1 on A with not empty name
-static uint8_t edit_name(const char *title, uint8_t *raw){
-  static const char chars[] PROGMEM = NAME_CHARS;
-  uint8_t pos = 0;
-
-  display_print_line_P(0, title);
-  display_print_line_P(3, PSTR("A-ok C-cancel"));
-
-  while(1){
-    draw_name_field(raw, pos);
-
-    const char *c = strchr_P(chars, raw[pos]);
-    uint8_t index = c ? c - chars : 0;
-    uint8_t key = wait_key();
-    if(key == C_KEY_PRESSED) return 0;
-    if(key == A_KEY_PRESSED) break;
-    switch(key){
-      case UP_KEY_PRESSED:
-        index = index < sizeof(chars) - 2 ? index + 1 : 0;
-        raw[pos] = pgm_read_byte(&chars[index]);
-        break;
-      case DOWN_KEY_PRESSED:
-        index = index ? index - 1 : sizeof(chars) - 2;
-        raw[pos] = pgm_read_byte(&chars[index]);
-        break;
-      case LEFT_KEY_PRESSED:
-        if(pos) pos--;
-        break;
-      case RIGHT_KEY_PRESSED:
-        if(pos < FAT16_RAW_NAME_SIZE - 1) pos++;
-        break;
-    }
-  }
-
-  pack_name(raw, FAT16_NAME_SIZE);
-  pack_name(raw + FAT16_NAME_SIZE, FAT16_EXT_SIZE);
-  if(raw[0] == ' '){
-    message(PSTR("empty name"), NULL);
-    return 0;
-  }
-  return 1;
-}
-
 static void rename(const fat16_entry_t *entry){
   uint8_t raw[FAT16_RAW_NAME_SIZE];
   uint8_t old[FAT16_RAW_NAME_SIZE];
 
   fat16_raw_name(entry, raw);
   memcpy(old, raw, sizeof(raw));
-  if(!edit_name(PSTR("rename"), raw)) return;
+  if(!name_edit(PSTR("rename"), raw)) return;
   if(!memcmp(raw, old, sizeof(raw))) return;
 
   draw_name_screen(PSTR("renaming..."), entry->name, PSTR(""), PSTR(""));
@@ -354,7 +275,7 @@ static void make_dir(void){
   uint8_t raw[FAT16_RAW_NAME_SIZE];
 
   memset(raw, ' ', sizeof(raw));
-  if(!edit_name(PSTR("make dir"), raw)) return;
+  if(!name_edit(PSTR("make dir"), raw)) return;
 
   draw_screen(PSTR("creating..."), PSTR(""), PSTR(""), PSTR(""));
   show_error(fat16_mkdir(file_browser_dir(), raw, sector));

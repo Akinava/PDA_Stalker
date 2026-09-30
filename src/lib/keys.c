@@ -38,3 +38,22 @@ uint8_t keys_get_press(void){
   last_key = key;
   return key;
 }
+
+// like keys_get_press, but the held arrow key is returned again after
+// KEYS_REPEAT_DELAY_MS every KEYS_REPEAT_RATE_MS (A, B, C are not repeated).
+// call it every interval_ms (> contact bounce time)
+uint8_t keys_get_repeat(uint8_t interval_ms){
+  static uint8_t last_key = NOOP;
+  static uint16_t held_ms;
+  uint8_t key = keys_read();
+  if(key != last_key){
+    last_key = key;
+    held_ms = 0;
+    return key;
+  }
+  if(key == NOOP || key == A_KEY_PRESSED || key == B_KEY_PRESSED || key == C_KEY_PRESSED) return NOOP;
+  held_ms += interval_ms;
+  if(held_ms < KEYS_REPEAT_DELAY_MS) return NOOP;
+  held_ms -= KEYS_REPEAT_RATE_MS;
+  return key;
+}
