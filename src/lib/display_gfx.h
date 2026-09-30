@@ -20,10 +20,17 @@
 #define DISPLAY_GFX_TAB         0x81    // '\t'
 #define DISPLAY_GFX_CR          0x82    // '\r'
 #define DISPLAY_GFX_UNKNOWN     0x83    // other not printable byte
+// cyrillic А..Я, а..я (U+0410..U+044F), then Ё, ё
+#define DISPLAY_GFX_CYRILLIC    0x84
+#define DISPLAY_GFX_CYRILLIC_LETTERS 64
+#define DISPLAY_GFX_YO_UPPER    (DISPLAY_GFX_CYRILLIC + DISPLAY_GFX_CYRILLIC_LETTERS)
+#define DISPLAY_GFX_YO_LOWER    (DISPLAY_GFX_YO_UPPER + 1)
+#define DISPLAY_GFX_LAST        DISPLAY_GFX_YO_LOWER
 
 void display_gfx_on(void);
 void display_gfx_off(void);
 void display_gfx_clear(void);
+uint8_t display_gfx_glyph(uint16_t code);
 void display_gfx_row(uint8_t row, const char *text, uint8_t len, uint8_t cursor, uint8_t invert);
 
 #endif
