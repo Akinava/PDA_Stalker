@@ -74,14 +74,40 @@ void display_print_at(uint8_t row, uint8_t col, const char *str){
   display_print(str);
 }
 
-// print str on the whole line, the rest of the line is filled with spaces
-void display_print_line(uint8_t row, const char *str){
+void display_print_P(const char *str){
+  char c;
+  while((c = pgm_read_byte(str++))){
+    display_putc(c);
+  }
+}
+
+// str from RAM or flash on the whole line, the rest is filled with spaces
+static void print_line(uint8_t row, const char *str, uint8_t in_flash){
   uint8_t col = 0;
   display_set_cursor(row, 0);
-  for(; *str && col < DISPLAY_COLS; col++){
-    display_putc(*str++);
+  for(; col < DISPLAY_COLS; col++, str++){
+    char c = in_flash ? pgm_read_byte(str) : *str;
+    if(!c) break;
+    display_putc(c);
   }
   for(; col < DISPLAY_COLS; col++){
     display_putc(' ');
+  }
+}
+
+// print str on the whole line, the rest of the line is filled with spaces
+void display_print_line(uint8_t row, const char *str){
+  print_line(row, str, 0);
+}
+
+void display_print_line_P(uint8_t row, const char *str){
+  print_line(row, str, 1);
+}
+
+// 4 lines from flash, NULL line is not changed (caller prints it from RAM)
+void display_print_screen_P(const char *l0, const char *l1, const char *l2, const char *l3){
+  const char *lines[DISPLAY_ROWS] = {l0, l1, l2, l3};
+  for(uint8_t row = 0; row < DISPLAY_ROWS; row++){
+    if(lines[row]) display_print_line_P(row, lines[row]);
   }
 }

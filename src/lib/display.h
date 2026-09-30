@@ -1,3 +1,4 @@
+#include <avr/pgmspace.h>
 #include "pins.h"
 #include "macro.h"
 #include "spi.h"
@@ -44,5 +45,9 @@ void display_putc(char c);
 void display_print(const char *str);
 void display_print_at(uint8_t row, uint8_t col, const char *str);
 void display_print_line(uint8_t row, const char *str);
+// _P: str is in flash (PSTR, PROGMEM)
+void display_print_P(const char *str);
+void display_print_line_P(uint8_t row, const char *str);
+void display_print_screen_P(const char *l0, const char *l1, const char *l2, const char *l3);
 
 #endif

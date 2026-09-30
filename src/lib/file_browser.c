@@ -44,7 +44,7 @@ static void draw_list(void){
 
   for(uint8_t row = 0; row < DISPLAY_ROWS; row++){
     if(row >= entries_count){
-      display_print_line(row, !entries_count && !row ? "(empty)" : "");
+      display_print_line_P(row, !entries_count && !row ? PSTR("(empty)") : PSTR(""));
       continue;
     }
     fat16_entry_t *entry = &entries[row];
@@ -95,6 +95,13 @@ uint8_t file_browser_run(fat16_entry_t *entry){
         draw_list();
         break;
       }
+      case B_KEY_PRESSED:
+        if(entries_count){
+          *entry = entries[dir.selected - dir.first];
+        }else{
+          entry->name[0] = '\0';
+        }
+        return FILE_BROWSER_MENU;
       case C_KEY_PRESSED:
         if(!dir_depth) return FILE_BROWSER_EXIT;
         dir = dir_stack[--dir_depth];
@@ -104,4 +111,15 @@ uint8_t file_browser_run(fat16_entry_t *entry){
     }
     _delay_ms(POLL_INTERVAL_MS);
   }
+}
+
+// cluster of the current directory
+uint16_t file_browser_dir(void){
+  return dir.cluster;
+}
+
+// read the current directory again after its change
+void file_browser_reload(void){
+  dir_count = fat16_dir_count(dir.cluster, sector);
+  if(dir.selected >= dir_count) dir.selected = dir_count ? dir_count - 1 : 0;
 }

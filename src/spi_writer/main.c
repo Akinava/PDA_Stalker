@@ -1,4 +1,5 @@
 #include <string.h>
+#include <avr/pgmspace.h>
 #include <util/delay.h>
 #include "display.h"
 #include "keys.h"
@@ -40,13 +41,8 @@ static uint8_t app_chosen;
 /******************************** screen *************************************/
 
 // SD traffic corrupts display RAM, so every screen is drawn completely
-// after the SD work
-static void draw_screen(const char *l0, const char *l1, const char *l2, const char *l3){
-  display_print_line(0, l0);
-  display_print_line(1, l1);
-  display_print_line(2, l2);
-  display_print_line(3, l3);
-}
+// after the SD work: lines are in flash, NULL line is printed from RAM
+#define draw_screen display_print_screen_P
 
 static uint8_t wait_key(void){
   uint8_t key;
@@ -56,13 +52,20 @@ static uint8_t wait_key(void){
   return key;
 }
 
-static void message(const char *l0, const char *l1){
-  draw_screen(l0, l1, "", "C - back");
+// l0, l1 are in flash, line 1 is ram_l1 from RAM instead of l1 if it is not NULL
+static void draw_message(const char *l0, const char *l1, const char *ram_l1,
+                         const char *l2, const char *l3){
+  draw_screen(l0, ram_l1 ? NULL : l1, l2, l3);
+  if(ram_l1) display_print_line(1, ram_l1);
+}
+
+static void message(const char *l0, const char *l1, const char *ram_l1){
+  draw_message(l0, l1, ram_l1, PSTR(""), PSTR("C - back"));
   while(wait_key() != C_KEY_PRESSED);
 }
 
-static uint8_t confirm(const char *l0, const char *l1){
-  draw_screen(l0, l1, "A - yes", "C - no");
+static uint8_t confirm(const char *l0, const char *l1, const char *ram_l1){
+  draw_message(l0, l1, ram_l1, PSTR("A - yes"), PSTR("C - no"));
   while(1){
     switch(wait_key()){
       case A_KEY_PRESSED: return 1;
@@ -72,9 +75,9 @@ static uint8_t confirm(const char *l0, const char *l1){
 }
 
 static char *put_hex(char *p, uint16_t value, uint8_t digits){
-  static const char hex[] = "0123456789ABCDEF";
+  static const char hex[] PROGMEM = "0123456789ABCDEF";
   while(digits--){
-    *p++ = hex[(value >> (digits * 4)) & 0x0F];
+    *p++ = pgm_read_byte(&hex[(value >> (digits * 4)) & 0x0F]);
   }
   *p = '\0';
   return p;
@@ -89,13 +92,25 @@ static void draw_marker(uint8_t row, uint8_t col){
   display_print_line(row, line);
 }
 
-// " " or ">" and the text
-static void draw_item(uint8_t row, uint8_t selected, const char *text){
+// " " or ">" and the text from RAM or flash
+static void print_item(uint8_t row, uint8_t selected, const char *text, uint8_t in_flash){
   char line[DISPLAY_COLS + 1];
   line[0] = selected ? '>' : ' ';
-  strncpy(line + 1, text, DISPLAY_COLS - 1);
+  if(in_flash){
+    strncpy_P(line + 1, text, DISPLAY_COLS - 1);
+  }else{
+    strncpy(line + 1, text, DISPLAY_COLS - 1);
+  }
   line[DISPLAY_COLS] = '\0';
   display_print_line(row, line);
+}
+
+static void draw_item(uint8_t row, uint8_t selected, const char *text){
+  print_item(row, selected, text, 0);
+}
+
+static void draw_item_P(uint8_t row, uint8_t selected, const char *text){
+  print_item(row, selected, text, 1);
 }
 
 // UP / DOWN in the list of count items
@@ -107,12 +122,12 @@ static uint8_t move_cursor(uint8_t key, uint8_t cursor, uint8_t count){
 
 /********************************* ISP ***************************************/
 
-// target is held in reset outside of programming, returns error or NULL
+// target is held in reset outside of programming, returns error (in flash) or NULL
 static const char *isp_connect(void){
-  if(!isp_enter()) return "no chip answer";
+  if(!isp_enter()) return PSTR("no chip answer");
   if(!isp_check_signature()){
     isp_pause();
-    return "wrong signature";
+    return PSTR("wrong signature");
   }
   return NULL;
 }
@@ -124,8 +139,10 @@ static void draw_progress(uint32_t done, uint32_t size){
   if(percent >= 100) *p++ = '1';
   if(percent >= 10) *p++ = '0' + percent / 10 % 10;
   *p++ = '0' + percent % 10;
-  strcpy(p, " %");
-  draw_screen("writing...", line, app_file.name, "");
+  strcpy_P(p, PSTR(" %"));
+  draw_screen(PSTR("writing..."), NULL, NULL, PSTR(""));
+  display_print_line(1, line);
+  display_print_line(2, app_file.name);
 }
 
 // write the sector to the flash and verify it, programming mode is on
@@ -137,11 +154,11 @@ static const char *write_sector(uint16_t address, uint16_t len){
     for(uint8_t i = 0; i < ISP_PAGE_SIZE; i += 2){
       isp_load_word(i / 2, sector[page + i] | ((uint16_t)sector[page + i + 1] << 8));
     }
-    if(!isp_write_page(address + page)) return "write error";
+    if(!isp_write_page(address + page)) return PSTR("write error");
   }
 
   for(uint16_t i = 0; i < len; i++){
-    if(isp_read_flash(address + i) != sector[i]) return "verify error";
+    if(isp_read_flash(address + i) != sector[i]) return PSTR("verify error");
   }
   return NULL;
 }
@@ -155,21 +172,21 @@ static const char *write_app(void){
   uint16_t len;
   const char *error;
 
-  draw_screen("erasing...", "", "", "");
+  draw_screen(PSTR("erasing..."), PSTR(""), PSTR(""), PSTR(""));
   if((error = isp_connect())) return error;
   if(!isp_chip_erase()){
     isp_pause();
-    return "erase error";
+    return PSTR("erase error");
   }
 
   fat16_file_open(&file, app_file.cluster, app_file.size);
   while(1){
     isp_pause();
     draw_progress(done, app_file.size);
-    if(!fat16_file_read(&file, sector, &len)) return "SD read error";
+    if(!fat16_file_read(&file, sector, &len)) return PSTR("SD read error");
     if(!len) return NULL;
 
-    if(!isp_enter()) return "no chip answer";
+    if(!isp_enter()) return PSTR("no chip answer");
     error = write_sector(address, len);
     if(error){
       isp_pause();
@@ -195,9 +212,9 @@ static const char *write_fuses(void){
   if(error) return error;
   for(uint8_t i = 0; i < ISP_FUSES && !error; i++){
     if(!isp_write_fuse(i, fuses[i])){
-      error = "write error";
+      error = PSTR("write error");
     }else if((isp_read_fuse(i) ^ fuses[i]) & fuse_masks[i]){
-      error = "verify error";
+      error = PSTR("verify error");
     }
   }
   isp_pause();
@@ -207,7 +224,7 @@ static const char *write_fuses(void){
 /******************************* load app ************************************/
 
 static void format_address(char *line){
-  strcpy(line, "addr 0x");
+  strcpy_P(line, PSTR("addr 0x"));
   put_hex(line + strlen(line), app_address, 4);
 }
 
@@ -217,8 +234,8 @@ static void edit_address(void){
   char line[DISPLAY_COLS + 1];
   uint8_t digit = 0;
 
-  display_print_line(2, "UP/DOWN - value");
-  display_print_line(3, "C - done");
+  display_print_line_P(2, PSTR("UP/DOWN - value"));
+  display_print_line_P(3, PSTR("C - done"));
   while(1){
     format_address(line);
     draw_item(0, 0, line);
@@ -247,26 +264,27 @@ static void edit_address(void){
 }
 
 static uint8_t is_bin(const fat16_entry_t *entry){
-  return !fat16_is_dir(entry) && !strcmp(entry->ext, "BIN");
+  return !fat16_is_dir(entry) && !strcmp_P(entry->ext, PSTR("BIN"));
 }
 
 static void choose_file(void){
   fat16_entry_t entry;
 
-  draw_screen("SD init...", "", "", "");
+  draw_screen(PSTR("SD init..."), PSTR(""), PSTR(""), PSTR(""));
   if(sd_init_card() == SD_TYPE_NONE){
-    message("SD init error", "insert the card");
+    message(PSTR("SD init error"), PSTR("insert the card"), NULL);
     return;
   }
   if(!fat16_mount(sector)){
-    message("no FAT16", "on the card");
+    message(PSTR("no FAT16"), PSTR("on the card"), NULL);
     return;
   }
 
   file_browser_open(sector);
-  // only BIN files, C in the root directory - back without a file
-  while(file_browser_run(&entry) == FILE_BROWSER_FILE){
-    if(is_bin(&entry)){
+  // only BIN files, B is not used, C in the root directory - back without a file
+  uint8_t result;
+  while((result = file_browser_run(&entry)) != FILE_BROWSER_EXIT){
+    if(result == FILE_BROWSER_FILE && is_bin(&entry)){
       app_file = entry;
       app_chosen = 1;
       return;
@@ -276,20 +294,20 @@ static void choose_file(void){
 
 static void start_write_app(void){
   if(!app_chosen){
-    message("no file", "");
+    message(PSTR("no file"), PSTR(""), NULL);
     return;
   }
   if(!app_file.size || (uint32_t)app_address + app_file.size > ISP_FLASH_SIZE){
-    message(app_file.name, "file too big");
+    message(PSTR("file too big"), NULL, app_file.name);
     return;
   }
-  if(!confirm("erase chip and", "write app?")) return;
+  if(!confirm(PSTR("erase chip and"), PSTR("write app?"), NULL)) return;
 
   const char *error = write_app();
   if(error){
-    message(error, app_file.name);
+    message(error, NULL, app_file.name);
   }else{
-    message("write done", app_file.name);
+    message(PSTR("write done"), NULL, app_file.name);
   }
 }
 
@@ -300,9 +318,13 @@ static void load_app_menu(void){
   while(1){
     format_address(line);
     draw_item(0, cursor == 0, line);
-    draw_item(1, cursor == 1, app_chosen ? app_file.name : "no file");
-    draw_item(2, cursor == 2, "write");
-    display_print_line(3, "C - back");
+    if(app_chosen){
+      draw_item(1, cursor == 1, app_file.name);
+    }else{
+      draw_item_P(1, cursor == 1, PSTR("no file"));
+    }
+    draw_item_P(2, cursor == 2, PSTR("write"));
+    display_print_line_P(3, PSTR("C - back"));
 
     uint8_t key = wait_key();
     cursor = move_cursor(key, cursor, 3);
@@ -320,11 +342,11 @@ static void load_app_menu(void){
 /********************************* fuses *************************************/
 
 static void format_fuses(char *line){
-  static const char names[ISP_FUSES] = {'H', 'L', 'E'};
+  static const char names[ISP_FUSES] PROGMEM = {'H', 'L', 'E'};
   char *p = line;
   for(uint8_t i = 0; i < ISP_FUSES; i++){
     if(i) *p++ = ' ';
-    *p++ = names[i];
+    *p++ = pgm_read_byte(&names[i]);
     *p++ = ':';
     p = put_hex(p, fuses[i], 2);
   }
@@ -335,8 +357,8 @@ static void edit_fuses(void){
   char line[DISPLAY_COLS + 1];
   uint8_t digit = 0;
 
-  display_print_line(2, "UP/DOWN - value");
-  display_print_line(3, "C - done");
+  display_print_line_P(2, PSTR("UP/DOWN - value"));
+  display_print_line_P(3, PSTR("C - done"));
   while(1){
     format_fuses(line);
     draw_item(0, 0, line);
@@ -372,14 +394,14 @@ static void start_write_fuses(void){
   char line[DISPLAY_COLS + 1];
 
   if((fuses[ISP_FUSE_HIGH] & HIGH_FUSE_SAFE_MASK) != HIGH_FUSE_SAFE_MASK){
-    message("unsafe high fuse", "ISP will be off");
+    message(PSTR("unsafe high fuse"), PSTR("ISP will be off"), NULL);
     return;
   }
   format_fuses(line);
-  if(!confirm("write fuses?", line)) return;
+  if(!confirm(PSTR("write fuses?"), NULL, line)) return;
 
   const char *error = write_fuses();
-  message(error ? error : "write done", line);
+  message(error ? error : PSTR("write done"), NULL, line);
 }
 
 static void fuses_menu(void){
@@ -390,9 +412,9 @@ static void fuses_menu(void){
   while(1){
     format_fuses(line);
     draw_item(0, cursor == 0, line);
-    draw_item(1, cursor == 1, "read from chip");
-    draw_item(2, cursor == 2, "write to chip");
-    draw_item(3, cursor == 3, "defaults");
+    draw_item_P(1, cursor == 1, PSTR("read from chip"));
+    draw_item_P(2, cursor == 2, PSTR("write to chip"));
+    draw_item_P(3, cursor == 3, PSTR("defaults"));
 
     uint8_t key = wait_key();
     cursor = move_cursor(key, cursor, 4);
@@ -405,7 +427,7 @@ static void fuses_menu(void){
         break;
       case 1:{
         const char *error = read_fuses();
-        if(error) message(error, "");
+        if(error) message(error, PSTR(""), NULL);
         break;
       }
       case 2:
@@ -421,7 +443,7 @@ static void fuses_menu(void){
 /********************************* main **************************************/
 
 int main(void){
-  static const char *const items[] = {"load app", "fuses"};
+  static const char items[][9] PROGMEM = {"load app", "fuses"};
   uint8_t cursor = 0;
 
   init_keys();
@@ -435,7 +457,7 @@ int main(void){
 
   while(1){
     for(uint8_t i = 0; i < DISPLAY_ROWS; i++){
-      draw_item(i, i == cursor, i < 2 ? items[i] : "");
+      draw_item_P(i, i == cursor, i < 2 ? items[i] : PSTR(""));
     }
 
     uint8_t key = wait_key();

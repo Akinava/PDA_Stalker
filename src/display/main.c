@@ -9,7 +9,8 @@
 
 static void draw(void){
   display_clear();
-  display_print_at(0, 0, "ABCabc123");
+  display_set_cursor(0, 0);
+  display_print_P(PSTR("ABCabc123"));
 }
 
 int main(void){

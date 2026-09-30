@@ -1,4 +1,5 @@
 #include <string.h>
+#include <avr/pgmspace.h>
 #include "fat16.h"
 
 // MBR partition entry
@@ -64,7 +65,7 @@ static void make_boot_sector(const fat16_layout_t *layout, uint8_t *buf){
   buf[0] = 0xEB;
   buf[1] = 0x3C;
   buf[2] = 0x90;
-  memcpy(buf + 3, "MSWIN4.1", 8);
+  memcpy_P(buf + 3, PSTR("MSWIN4.1"), 8);
   put16(buf, 11, SD_SECTOR_SIZE);
   buf[13] = layout->cluster_sectors;
   put16(buf, 14, FAT16_RESERVED_SECTORS);
@@ -83,8 +84,8 @@ static void make_boot_sector(const fat16_layout_t *layout, uint8_t *buf){
   buf[36] = 0x80;           // drive number
   buf[38] = 0x29;           // extended boot signature
   put32(buf, 39, FAT16_VOLUME_ID);
-  memcpy(buf + 43, FAT16_VOLUME_LABEL, 11);
-  memcpy(buf + 54, "FAT16   ", 8);
+  memcpy_P(buf + 43, PSTR(FAT16_VOLUME_LABEL), 11);
+  memcpy_P(buf + 54, PSTR("FAT16   "), 8);
   put_signature(buf);
 }
 
@@ -121,7 +122,7 @@ uint8_t fat16_format(const fat16_layout_t *layout, uint8_t *buf, fat16_progress_
     }
     // volume label is the first record of the root directory
     if(sector == root_start){
-      memcpy(buf, FAT16_VOLUME_LABEL, 11);
+      memcpy_P(buf, PSTR(FAT16_VOLUME_LABEL), 11);
       buf[DIR_ATTR_OFFSET] = DIR_ATTR_VOLUME_ID;
     }
     if(!sd_write_sector(sector, buf)) return 0;
