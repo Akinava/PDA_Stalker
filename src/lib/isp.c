@@ -2,7 +2,6 @@
 #include "isp.h"
 
 // instructions (ATmega328P datasheet, Serial Programming Instruction Set)
-#define ISP_PROGRAM_ENABLE      0xAC, 0x53
 #define ISP_CHIP_ERASE          0xAC, 0x80
 #define ISP_POLL_READY          0xF0, 0x00
 #define ISP_READ_SIGNATURE      0x30, 0x00
@@ -50,7 +49,7 @@ static uint8_t wait_ready(void){
 
 // hold the target in reset, SPI is slow for any target clock:
 // SCK must be < target clock / 4, new chip runs at 1 MHz
-void isp_begin(void){
+void init_isp(void){
   init_spi();
   spi_set_mode(SPI_MODE0);
   // fosc/128 = 125 kHz
@@ -60,7 +59,7 @@ void isp_begin(void){
 }
 
 // release the target: it starts its program
-void isp_end(void){
+void isp_release(void){
   SET_HIGH(ISP_RESET_PORT, ISP_RESET_PIN);
   // SPI speed of init_spi
   SPSR |= _BV(SPI2X);

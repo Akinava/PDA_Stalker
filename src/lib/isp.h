@@ -21,8 +21,10 @@
 #define ISP_FUSE_EXT            2
 #define ISP_FUSES               3
 
-void isp_begin(void);
-void isp_end(void);
+// init_isp holds the target in reset and sets slow SPI clock (125 kHz),
+// isp_release lets the target run its program
+void init_isp(void);
+void isp_release(void);
 uint8_t isp_enter(void);
 void isp_pause(void);
 uint8_t isp_check_signature(void);
