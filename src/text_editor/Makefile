@@ -22,6 +22,7 @@ SOURCES = main.c
 SOURCES += $(LIB_DIR)/spi.c
 SOURCES += $(LIB_DIR)/display.c
 SOURCES += $(LIB_DIR)/display_gfx.c
+SOURCES += $(LIB_DIR)/utf8.c
 SOURCES += $(LIB_DIR)/keys.c
 SOURCES += $(LIB_DIR)/radio.c
 SOURCES += $(LIB_DIR)/sd.c

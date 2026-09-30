@@ -12,8 +12,9 @@
 #include "file_browser.h"
 #include "name_edit.h"
 #include "loader.h"
+#include "utf8.h"
 
-// Editor of text and binary (hex) files on SD card.
+// Editor of text (UTF-8, latin and cyrillic) and binary (hex) files on SD card.
 // The document is in the temp file on the card by pages, only the current
 // page is in RAM, so the file size is not limited by RAM.
 //
@@ -64,12 +65,37 @@
 #define MENU_ITEMS   6
 #define MENU_NONE    0xFF
 
-// chars for text: LEFT / RIGHT - group, UP / DOWN - char in group
-static const char group_upper[] PROGMEM = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-static const char group_lower[] PROGMEM = "abcdefghijklmnopqrstuvwxyz";
-static const char group_digit[] PROGMEM = "0123456789";
-static const char group_other[] PROGMEM = " \n\t.,:;!?-+*/=()[]{}<>'\"#$%&@^_`|~\\";
-static const char *const groups[] PROGMEM = {group_upper, group_lower, group_digit, group_other};
+// chars for text (unicode): LEFT / RIGHT - group, UP / DOWN - char in group
+static const uint16_t group_upper[] PROGMEM = {
+  'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T',
+  'U','V','W','X','Y','Z', 0
+};
+static const uint16_t group_lower[] PROGMEM = {
+  'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t',
+  'u','v','w','x','y','z', 0
+};
+// А..Я with Ё after Е
+static const uint16_t group_cyrillic_upper[] PROGMEM = {
+  0x410, 0x411, 0x412, 0x413, 0x414, 0x415, 0x401, 0x416, 0x417, 0x418, 0x419,
+  0x41A, 0x41B, 0x41C, 0x41D, 0x41E, 0x41F, 0x420, 0x421, 0x422, 0x423, 0x424,
+  0x425, 0x426, 0x427, 0x428, 0x429, 0x42A, 0x42B, 0x42C, 0x42D, 0x42E, 0x42F, 0
+};
+// а..я with ё after е
+static const uint16_t group_cyrillic_lower[] PROGMEM = {
+  0x430, 0x431, 0x432, 0x433, 0x434, 0x435, 0x451, 0x436, 0x437, 0x438, 0x439,
+  0x43A, 0x43B, 0x43C, 0x43D, 0x43E, 0x43F, 0x440, 0x441, 0x442, 0x443, 0x444,
+  0x445, 0x446, 0x447, 0x448, 0x449, 0x44A, 0x44B, 0x44C, 0x44D, 0x44E, 0x44F, 0
+};
+static const uint16_t group_digit[] PROGMEM = {
+  '0','1','2','3','4','5','6','7','8','9', 0
+};
+static const uint16_t group_other[] PROGMEM = {
+  ' ','\n','\t','.',',',':',';','!','?','-','+','*','/','=','(',')','[',']','{','}',
+  '<','>','\'','"','#','$','%','&','@','^','_','`','|','~','\\', 0
+};
+static const uint16_t *const groups[] PROGMEM = {
+  group_upper, group_lower, group_cyrillic_upper, group_cyrillic_lower, group_digit, group_other
+};
 #define GROUPS (sizeof(groups) / sizeof(groups[0]))
 
 // temp file "/TMP/~TEXTED.TMP"
@@ -97,7 +123,7 @@ static uint8_t mode = MODE_TEXT;
 static uint8_t editing;           // the char / nibble is being changed
 static uint8_t modified;
 static uint16_t top;              // the first line (text) or row (hex) on the screen
-static uint8_t last_char = 'a';   // inserted char
+static uint16_t last_char = 'a';  // inserted char (unicode)
 static fat16_entry_t file;
 static uint8_t has_file;
 static const char *status_message; // in flash, shown instead of the name once
@@ -227,8 +253,10 @@ static uint8_t page_remove(void){
 
 static void draw_status(void);
 
-// the full page is split in two: after '\n' if it is near the middle
-static uint8_t page_split(void){
+// the full page is split in two: after '\n' if it is near the middle, never
+// inside a char. char_at_cursor - the cursor goes to the new page if it is
+// at the cut (the char at the cursor is there)
+static uint8_t page_split(uint8_t char_at_cursor){
   uint16_t cut = PAGE_DATA / 2;
   uint32_t place;
 
@@ -238,6 +266,7 @@ static uint8_t page_split(void){
       break;
     }
   }
+  for(uint8_t i = 1; i < UTF8_MAX_BYTES && utf8_is_continuation(data[cut]); i++) cut++;
   // the next pages are moved: it takes time
   status_message = PSTR("wait...");
   draw_status();
@@ -250,7 +279,7 @@ static uint8_t page_split(void){
   page_dirty = 1;
 
   // the cursor is in the second half: go to the new page
-  if(cursor > cut){
+  if(cursor > cut || (char_at_cursor && cursor == cut)){
     uint16_t pos = cursor - cut;
     if(!page_next()) return 0;
     cursor = pos;
@@ -292,14 +321,38 @@ static uint8_t temp_create(void){
 
 /****************************** text layout **********************************/
 
+// the char at pos of the text of size bytes: code gets it, returns its bytes
+static uint8_t text_char(const uint8_t *text, uint16_t size, uint16_t pos, uint16_t *code){
+  return utf8_decode(text + pos, size - pos, code);
+}
+
+// bytes of the char at pos of the current page
+static uint8_t char_bytes(uint16_t pos){
+  uint16_t code;
+  return text_char(data, len, pos, &code);
+}
+
+// the start of the char before pos of the current page
+static uint16_t char_before(uint16_t pos){
+  if(!pos) return 0;
+  uint16_t start = pos - 1;
+  for(uint8_t i = 1; i < UTF8_MAX_BYTES && start && utf8_is_continuation(data[start]); i++){
+    start--;
+  }
+  // a wrong byte is one char
+  return start + char_bytes(start) == pos ? start : pos - 1;
+}
+
 // a line is ended by '\n' (it is the last char of the line) or by TEXT_WIDTH
 // chars, returns the start of the next line of the text of size bytes
 static uint16_t text_line_end(const uint8_t *text, uint16_t size, uint16_t start){
   uint8_t col = 0;
   while(start < size){
-    if(text[start] == '\n') return start + 1;
+    uint16_t code;
+    uint8_t bytes = text_char(text, size, start, &code);
+    if(code == '\n') return start + 1;
     if(col == TEXT_WIDTH) break;
-    start++;
+    start += bytes;
     col++;
   }
   return start;
@@ -315,7 +368,17 @@ static uint8_t line_open(uint16_t start, uint16_t end){
   return end == len && !(end > start && data[end - 1] == '\n');
 }
 
-// line and column of the position
+// chars from start to pos of the current page
+static uint8_t chars_between(uint16_t start, uint16_t pos){
+  uint8_t chars = 0;
+  while(start < pos){
+    start += char_bytes(start);
+    chars++;
+  }
+  return chars;
+}
+
+// line and column (in chars) of the position
 static void text_locate(uint16_t pos, uint16_t *line, uint8_t *col){
   uint16_t start = 0;
   uint16_t n = 0;
@@ -323,7 +386,7 @@ static void text_locate(uint16_t pos, uint16_t *line, uint8_t *col){
     uint16_t end = line_end(start);
     if(pos < end || (pos == len && line_open(start, end))){
       *line = n;
-      *col = pos - start;
+      *col = chars_between(start, pos);
       return;
     }
     // the end position on the empty line after '\n' or the full line
@@ -348,7 +411,7 @@ static uint16_t line_start(uint16_t n){
   return start;
 }
 
-// position at column of the line, the column is clamped to the line
+// position at column (in chars) of the line, the column is clamped to the line
 static uint16_t text_pos(uint16_t n, uint8_t col){
   uint16_t last;
   uint8_t c;
@@ -358,18 +421,21 @@ static uint16_t text_pos(uint16_t n, uint8_t col){
   uint16_t start = line_start(n);
   if(start >= len) return len;
   uint16_t end = line_end(start);
-  uint16_t max = line_open(start, end) ? end : end - 1;
-  return start + col > max ? max : start + col;
+  uint16_t max = line_open(start, end) ? end : char_before(end);
+  uint16_t pos = start;
+  while(col-- && pos < max){
+    pos += char_bytes(pos);
+  }
+  return pos > max ? max : pos;
 }
 
 /******************************** screen *************************************/
 
-static uint8_t glyph(uint8_t c, uint8_t at_cursor){
-  if(c == '\n') return at_cursor ? DISPLAY_GFX_NEWLINE : ' ';
-  if(c == '\t') return DISPLAY_GFX_TAB;
-  if(c == '\r') return DISPLAY_GFX_CR;
-  if(c < ' ' || c > '~') return DISPLAY_GFX_UNKNOWN;
-  return c;
+static uint8_t glyph(uint16_t code, uint8_t at_cursor){
+  if(code == '\n') return at_cursor ? DISPLAY_GFX_NEWLINE : ' ';
+  if(code == '\t') return DISPLAY_GFX_TAB;
+  if(code == '\r') return DISPLAY_GFX_CR;
+  return display_gfx_glyph(code);
 }
 
 static char hex_digit(uint8_t value){
@@ -409,15 +475,23 @@ static void draw_text(void){
     if(n <= last){
       if(start < len){
         uint16_t end = line_end(start);
-        for(uint16_t p = start; p < end; p++){
-          text[p - start] = glyph(data[p], p == cursor);
+        uint8_t col = 0;
+        for(uint16_t p = start; p < end; col++){
+          uint16_t code;
+          uint8_t bytes = text_char(data, len, p, &code);
+          text[col] = glyph(code, p == cursor);
+          p += bytes;
         }
         start = end;
       }
     }else if(next_start < preview_len){
+      // the preview may end inside a char: it is shown as the unknown one
       uint16_t end = text_line_end(preview, preview_len, next_start);
-      for(uint16_t p = next_start; p < end; p++){
-        text[p - next_start] = glyph(preview[p], 0);
+      uint8_t col = 0;
+      for(uint16_t p = next_start; p < end; col++){
+        uint16_t code;
+        p += text_char(preview, preview_len, p, &code);
+        text[col] = glyph(code, 0);
       }
       next_start = end;
     }
@@ -516,27 +590,38 @@ static void draw_editor(void){
 
 /********************************* edit **************************************/
 
-// insert at the cursor, the full page is split
-static uint8_t insert_byte(uint8_t value){
-  if(len == PAGE_DATA && !page_split()){
-    status_message = PSTR("SD card error");
-    return 0;
-  }
-  memmove(data + cursor + 1, data + cursor, len - cursor);
-  data[cursor] = value;
-  len++;
-  total++;
+// room for bytes at the cursor: the full page is split, char_at_cursor -
+// the char at the cursor goes with the cursor if the page is cut there
+static uint8_t make_room(uint8_t bytes, uint8_t char_at_cursor){
+  if(len + bytes <= PAGE_DATA) return 1;
+  if(page_split(char_at_cursor)) return 1;
+  status_message = PSTR("SD card error");
+  return 0;
+}
+
+// insert bytes at the cursor
+static uint8_t insert_bytes(const uint8_t *bytes, uint8_t size){
+  if(!make_room(size, 0)) return 0;
+  memmove(data + cursor + size, data + cursor, len - cursor);
+  memcpy(data + cursor, bytes, size);
+  len += size;
+  total += size;
   modified = 1;
   page_dirty = 1;
   return 1;
 }
 
-// delete at the cursor, the empty page is removed
-static void delete_byte(void){
-  if(cursor >= len) return;
-  memmove(data + cursor, data + cursor + 1, len - cursor - 1);
-  len--;
-  total--;
+static uint8_t insert_char(uint16_t code){
+  uint8_t bytes[UTF8_MAX_BYTES];
+  return insert_bytes(bytes, utf8_encode(code, bytes));
+}
+
+// delete bytes at the cursor, the empty page is removed
+static void delete_bytes(uint8_t size){
+  if(cursor + size > len) return;
+  memmove(data + cursor, data + cursor + size, len - cursor - size);
+  len -= size;
+  total -= size;
   modified = 1;
   page_dirty = 1;
   if(len || pages == 1) return;
@@ -562,27 +647,52 @@ static void delete_byte(void){
   status_message = PSTR("SD card error");
 }
 
+// the char at the cursor is replaced, its bytes may change: 'a' - 1, 'я' - 2
+static void replace_char(uint16_t code){
+  uint8_t bytes[UTF8_MAX_BYTES];
+  uint8_t size = utf8_encode(code, bytes);
+  uint8_t old = char_bytes(cursor);
+  if(size > old && !make_room(size - old, 1)) return;
+  memmove(data + cursor + size, data + cursor + old, len - cursor - old);
+  memcpy(data + cursor, bytes, size);
+  len = len + size - old;
+  total = total + size - old;
+  modified = 1;
+  page_dirty = 1;
+}
+
+static uint16_t group_char(uint8_t group, uint8_t index){
+  const uint16_t *chars = (const uint16_t *)pgm_read_word(&groups[group]);
+  return pgm_read_word(&chars[index]);
+}
+
+static uint8_t group_size(uint8_t group){
+  uint8_t size = 0;
+  while(group_char(group, size)) size++;
+  return size;
+}
+
 // group of the char and its index in the group, 0 if the char is in no group
-static uint8_t find_char(uint8_t c, uint8_t *group, uint8_t *index){
+static uint8_t find_char(uint16_t code, uint8_t *group, uint8_t *index){
   for(uint8_t g = 0; g < GROUPS; g++){
-    const char *chars = (const char *)pgm_read_word(&groups[g]);
-    const char *found = strchr_P(chars, c);
-    if(c && found){
-      *group = g;
-      *index = found - chars;
-      return 1;
+    for(uint8_t i = 0; group_char(g, i); i++){
+      if(group_char(g, i) == code){
+        *group = g;
+        *index = i;
+        return 1;
+      }
     }
   }
   return 0;
 }
 
 static void change_char(uint8_t key){
+  uint16_t code;
   uint8_t group = 0;
   uint8_t index = 0;
-  uint8_t found = find_char(data[cursor], &group, &index);
-  if(found){
-    const char *chars = (const char *)pgm_read_word(&groups[group]);
-    uint8_t size = strlen_P(chars);
+  text_char(data, len, cursor, &code);
+  if(find_char(code, &group, &index)){
+    uint8_t size = group_size(group);
     switch(key){
       case UP_KEY_PRESSED:
         index = index + 1 < size ? index + 1 : 0;
@@ -598,13 +708,10 @@ static void change_char(uint8_t key){
         break;
     }
   }
-  // the same place in the new group: 'c' -> 'C'
-  const char *chars = (const char *)pgm_read_word(&groups[group]);
-  uint8_t size = strlen_P(chars);
+  // the same place in the new group: 'c' -> 'C', 'а' -> 'А'
+  uint8_t size = group_size(group);
   if(index >= size) index = size - 1;
-  data[cursor] = pgm_read_byte(&chars[index]);
-  modified = 1;
-  page_dirty = 1;
+  replace_char(group_char(group, index));
 }
 
 static void change_nibble(uint8_t key){
@@ -639,17 +746,16 @@ static void text_key(uint8_t key){
   if(editing){
     switch(key){
       case A_KEY_PRESSED:
-        last_char = data[cursor];
+        cursor += text_char(data, len, cursor, &last_char);
         editing = 0;
-        cursor++;
         cursor_to_next_page();
         break;
       case C_KEY_PRESSED:
-        last_char = data[cursor];
+        text_char(data, len, cursor, &last_char);
         editing = 0;
         break;
       case B_KEY_PRESSED:
-        delete_byte();
+        delete_bytes(char_bytes(cursor));
         editing = 0;
         break;
       default:
@@ -661,13 +767,13 @@ static void text_key(uint8_t key){
   switch(key){
     case LEFT_KEY_PRESSED:
       if(cursor){
-        cursor--;
+        cursor = char_before(cursor);
       }else if(page_prev()){
-        cursor = len ? len - 1 : 0;
+        cursor = char_before(len);
       }
       break;
     case RIGHT_KEY_PRESSED:
-      if(cursor < len) cursor++;
+      if(cursor < len) cursor += char_bytes(cursor);
       cursor_to_next_page();
       break;
     case UP_KEY_PRESSED:
@@ -688,10 +794,10 @@ static void text_key(uint8_t key){
       break;
     case A_KEY_PRESSED:
       // at the end: a new char
-      if(cursor < len || insert_byte(last_char)) editing = 1;
+      if(cursor < len || insert_char(last_char)) editing = 1;
       break;
     case B_KEY_PRESSED:
-      if(insert_byte(last_char)) editing = 1;
+      if(insert_char(last_char)) editing = 1;
       break;
   }
 }
@@ -723,7 +829,7 @@ static void hex_key(uint8_t key){
         }
         break;
       case B_KEY_PRESSED:
-        delete_byte();
+        delete_bytes(1);
         nibble = 0;
         editing = 0;
         break;
@@ -774,10 +880,10 @@ static void hex_key(uint8_t key){
       }
       break;
     case A_KEY_PRESSED:
-      if(cursor < len || insert_byte(0)) editing = 1;
+      if(cursor < len || insert_bytes((const uint8_t *)"", 1)) editing = 1;
       break;
     case B_KEY_PRESSED:
-      if(insert_byte(0)){
+      if(insert_bytes((const uint8_t *)"", 1)){
         nibble = 0;
         editing = 1;
       }
@@ -865,8 +971,10 @@ static void mount(void){
 
 /********************************* files *************************************/
 
-static uint8_t is_binary(uint8_t c){
-  return c > '~' || (c < ' ' && c != '\n' && c != '\r' && c != '\t');
+// not a text: control chars and not UTF-8
+static uint8_t is_binary(uint8_t *utf8_state, uint8_t c){
+  if(c < ' ' && c != '\n' && c != '\r' && c != '\t') return 1;
+  return !utf8_check(utf8_state, c);
 }
 
 static uint8_t is_temp(const fat16_entry_t *entry){
@@ -884,6 +992,7 @@ static void new_file(void){
 static uint8_t load(const fat16_entry_t *entry, uint8_t *binary){
   fat16_file_t reader;
   uint16_t read;
+  uint8_t utf8_state = 0;
 
   document_clear();
   pages = 0;
@@ -896,9 +1005,16 @@ static uint8_t load(const fat16_entry_t *entry, uint8_t *binary){
     uint32_t data_sector = reader.sector - 1;
     for(uint16_t i = 0; i < read; i++){
       uint8_t c = sector[i];
-      if(is_binary(c)) *binary = 1;
+      if(is_binary(&utf8_state, c)) *binary = 1;
+      // the page is full: it is cut before a char, not inside it
+      if(len == PAGE_DATA || (len >= PAGE_FILL_MAX && !utf8_is_continuation(c))){
+        page_index = pages++;
+        page_dirty = 1;
+        if(!page_write() || !sd_read_sector(data_sector, sector)) return 0;
+        len = 0;
+      }
       data[len++] = c;
-      if(len == PAGE_FILL_MAX || (len >= PAGE_FILL_MIN && c == '\n')){
+      if(len >= PAGE_FILL_MIN && c == '\n'){
         page_index = pages++;
         page_dirty = 1;
         if(!page_write() || !sd_read_sector(data_sector, sector)) return 0;
@@ -907,6 +1023,8 @@ static uint8_t load(const fat16_entry_t *entry, uint8_t *binary){
     }
     total += read;
   }
+  // the file ends inside a char
+  if(utf8_state) *binary = 1;
   // the rest, an empty file has one empty page
   if(len || !pages){
     page_index = pages++;
@@ -1150,6 +1268,10 @@ static void run_menu(void){
       mode = mode == MODE_HEX ? MODE_TEXT : MODE_HEX;
       nibble = 0;
       top = 0;
+      // hex cursor could be inside a char
+      if(mode == MODE_TEXT){
+        for(uint8_t i = 1; i < UTF8_MAX_BYTES && cursor && utf8_is_continuation(data[cursor]); i++) cursor--;
+      }
       break;
     case MENU_EXIT:
       exit_app();
