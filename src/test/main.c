@@ -1,9 +1,11 @@
+#include <stdlib.h>
 #include <util/delay.h>
 #include "display.h"
 #include "keys.h"
 #include "led.h"
 #include "vibro.h"
 #include "mic.h"
+#include "speaker.h"
 
 // keys polling interval, also debounce time
 #define POLL_INTERVAL_MS 20
@@ -12,11 +14,14 @@
 // because loud sound rarely reaches full ADC range
 #define MIC_BAR_FULL_LEVEL 512
 #define MIC_BAR_CHAR '#'
+// speaker test tones, Hz
+#define SPEAKER_TONES {250, 500, 1000, 2000, 4000}
 
 static void test_button(void);
 static void test_led(void);
 static void test_vibro(void);
 static void test_mic(void);
+static void test_speaker(void);
 
 typedef struct {
   const char *name;
@@ -28,6 +33,7 @@ static const menu_item_t menu[] = {
   {"test LED",    test_led},
   {"test vibro",  test_vibro},
   {"test mic",    test_mic},
+  {"test speaker", test_speaker},
 };
 #define MENU_SIZE (sizeof(menu) / sizeof(menu[0]))
 
@@ -141,10 +147,55 @@ static void test_mic(void){
   }
 }
 
+static void draw_tone(uint16_t freq){
+  char line[DISPLAY_COLS + 1] = "tone ";
+  utoa(freq, line + 5, 10);
+  uint8_t len = 5;
+  while(line[len]) len++;
+  line[len++] = ' ';
+  line[len++] = 'H';
+  line[len++] = 'z';
+  line[len] = '\0';
+  display_print_line(0, line);
+}
+
+static void test_speaker(void){
+  static const uint16_t tones[] = SPEAKER_TONES;
+  const uint8_t tones_count = sizeof(tones) / sizeof(tones[0]);
+  uint8_t tone = 2;
+
+  display_clear();
+  display_print_line(1, "UP/DOWN - tone");
+  display_print_line(2, "C - back");
+  draw_tone(tones[tone]);
+  speaker_tone(tones[tone]);
+
+  while(1){
+    switch(keys_get_press()){
+      case UP_KEY_PRESSED:
+        if(tone < tones_count - 1) tone++;
+        break;
+      case DOWN_KEY_PRESSED:
+        if(tone) tone--;
+        break;
+      case C_KEY_PRESSED:
+        speaker_off();
+        return;
+      default:
+        _delay_ms(POLL_INTERVAL_MS);
+        continue;
+    }
+    draw_tone(tones[tone]);
+    speaker_tone(tones[tone]);
+    _delay_ms(POLL_INTERVAL_MS);
+  }
+}
+
 int main(void){
   init_keys();
   init_led();
   init_vibro();
+  init_speaker();
   init_display();
   init_mic();
   draw_menu();

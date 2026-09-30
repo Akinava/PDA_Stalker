@@ -25,6 +25,7 @@ SOURCES += $(LIB_DIR)/keys.c
 SOURCES += $(LIB_DIR)/led.c
 SOURCES += $(LIB_DIR)/vibro.c
 SOURCES += $(LIB_DIR)/mic.c
+SOURCES += $(LIB_DIR)/speaker.c
 #=======================================
 
 OBJECTS = $(addprefix $(BUILD_DIR)/, $(notdir $(SOURCES:.c=.o)))
