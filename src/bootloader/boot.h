@@ -9,7 +9,7 @@
 #define WATCHDOG_OFF    0
 #define WATCHDOG_125MS  (_BV(WDP1) | _BV(WDP0) | _BV(WDE))
 
-const char BOOT_APP[] PROGMEM = "/BIN/FM.BIN";
+const char BOOT_APP[] PROGMEM = "/APPS/FM.BIN";
 const int (*app_start)(void) = 0x0;
 
 void load_default_app(void);

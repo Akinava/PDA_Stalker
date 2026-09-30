@@ -2,7 +2,7 @@
 
 # Name of the project
 TARGET = file_manager
-# file name on SD card: ../../sd/BIN/$(APP_NAME).BIN
+# file name on SD card: ../../sd/APPS/$(APP_NAME).BIN
 APP_NAME = FM
 
 # tipe of MK
@@ -15,7 +15,7 @@ AVRDUDE_PROGRAMMER = usbasp
 
 LIB_DIR = ../lib
 BOOT_DIR = ../bootloader
-SD_BIN_DIR = ../../sd/BIN
+SD_APPS_DIR = ../../sd/APPS
 BUILD_DIR = build
 
 SOURCES = main.c
@@ -94,7 +94,7 @@ program: $(TARGET)_boot.hex
 	$(AVRDUDE) $(AVRDUDE_FLAGS) -U flash:w:$<:i
 
 bin: $(TARGET).hex
-	$(OBJCOPY) -I ihex -O binary $< $(SD_BIN_DIR)/$(APP_NAME).BIN
+	$(OBJCOPY) -I ihex -O binary $< $(SD_APPS_DIR)/$(APP_NAME).BIN
 
 clean:
 	rm -rf $(BUILD_DIR) $(TARGET).elf $(TARGET).hex $(TARGET)_boot.hex $(TARGET).asm

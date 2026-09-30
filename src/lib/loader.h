@@ -20,7 +20,7 @@
 uint8_t loader_is_present(void);
 // these functions flash the application and reset MCU, they never return
 void loader_load_app_by_cluster(uint16_t cluster, uint32_t size) __attribute__((noreturn));
-// file_path is in flash (PROGMEM), unix view: "/BIN/APP.BIN"
+// file_path is in flash (PROGMEM), unix view: "/APPS/APP.BIN"
 void loader_load_app_by_name(const char *file_path) __attribute__((noreturn));
 void loader_load_default_app(void) __attribute__((noreturn));
 

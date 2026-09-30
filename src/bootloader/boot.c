@@ -152,7 +152,7 @@ static inline void watchdog_config_(uint8_t x){
 
 static inline uint8_t find_file_by_path(const char* file_path){
   // parameters:
-  // file_path - in unix view exp: '/BIN/APP.BIN'
+  // file_path - in unix view exp: '/APPS/APP.BIN'
   // file      - file sector, file size
   //
   // if file exist save in file file sector and size; return 1
