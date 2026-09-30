@@ -82,7 +82,7 @@ GND - button right - PD7
 === microphone
 +------+
 |  GND*| - GND
-|  VDD*| - PB2
+|  VDD*| - VCC
 | Gain*| -
 |  Out*| - PC1
 |   AR*| - 

@@ -1,0 +1,152 @@
+#include <util/delay.h>
+#include "sd.h"
+
+// ACMD41 init takes up to 1 s
+#define SD_INIT_TIMEOUT_MS      1000
+#define SD_RESPONSE_RETRY       10
+#define SD_READ_RETRY           50000
+
+static uint8_t card_type = SD_TYPE_NONE;
+
+static void sd_select(void){
+  spi_set_mode(SPI_MODE0);
+  SET_LOW(SD_PORT, SD_CS);
+}
+
+static void sd_unselect(void){
+  SET_HIGH(SD_PORT, SD_CS);
+  // card releases MISO only on the next clock, the bus is shared
+  spi_send(0xFF);
+}
+
+// send command, return R1 (bit 7 set = no response)
+static uint8_t sd_command(uint8_t cmd, uint32_t arg){
+  // CRC is checked only for CMD0 and CMD8 before init
+  uint8_t crc = 0xFF;
+  if(cmd == SD_CMD0) crc = 0x95;
+  if(cmd == SD_CMD8) crc = 0x87;
+
+  spi_send(0xFF);
+  spi_send(cmd | 0x40);
+  for(int8_t shift = 24; shift >= 0; shift -= 8){
+    spi_send(arg >> shift);
+  }
+  spi_send(crc);
+
+  uint8_t r1;
+  uint8_t retry = SD_RESPONSE_RETRY;
+  do{
+    r1 = spi_transfer(0xFF);
+  }while((r1 & 0x80) && --retry);
+  return r1;
+}
+
+static uint8_t sd_app_command(uint8_t cmd, uint32_t arg){
+  sd_command(SD_CMD55, 0);
+  return sd_command(cmd, arg);
+}
+
+void init_sd(void){
+  // CS high: card is not selected
+  SET_DDR_OUT(SD_DDR, SD_CS);
+  SET_HIGH(SD_PORT, SD_CS);
+  init_spi();
+}
+
+// init card, SPI clock must be <= 400 kHz; returns SD_TYPE_*
+uint8_t sd_init_card(void){
+  uint8_t r1;
+  card_type = SD_TYPE_NONE;
+
+  // 80 clocks with CS high: card goes to native mode
+  spi_set_mode(SPI_MODE0);
+  SET_HIGH(SD_PORT, SD_CS);
+  for(uint8_t i = 0; i < 10; i++){
+    spi_send(0xFF);
+  }
+
+  sd_select();
+
+  // reset, card goes to SPI mode
+  if(sd_command(SD_CMD0, 0) != SD_R1_IDLE) goto error;
+
+  // check voltage 2.7-3.6 V, pattern 0xAA; SD v1 does not know CMD8
+  uint8_t type;
+  uint32_t acmd41_arg;
+  r1 = sd_command(SD_CMD8, 0x1AA);
+  if(r1 & SD_R1_ILLEGAL_COMMAND){
+    type = SD_TYPE_V1;
+    acmd41_arg = 0;
+  }else{
+    uint8_t r7[4];
+    for(uint8_t i = 0; i < 4; i++){
+      r7[i] = spi_transfer(0xFF);
+    }
+    if(r7[2] != 0x01 || r7[3] != 0xAA) goto error;
+    type = SD_TYPE_V2;
+    // host supports high capacity
+    acmd41_arg = 0x40000000;
+  }
+
+  // wait until card leaves idle state
+  for(uint16_t ms = 0; ; ms++){
+    if(sd_app_command(SD_ACMD41, acmd41_arg) == SD_R1_READY) break;
+    if(ms == SD_INIT_TIMEOUT_MS) goto error;
+    _delay_ms(1);
+  }
+
+  if(type == SD_TYPE_V2){
+    // OCR bit 30 (CCS): high capacity card
+    if(sd_command(SD_CMD58, 0) != SD_R1_READY) goto error;
+    uint8_t ocr = spi_transfer(0xFF);
+    for(uint8_t i = 0; i < 3; i++){
+      spi_send(0xFF);
+    }
+    if(ocr & 0x40) type = SD_TYPE_SDHC;
+  }
+
+  // byte addressing cards: sector size 512
+  if(type != SD_TYPE_SDHC){
+    if(sd_command(SD_CMD16, SD_SECTOR_SIZE) != SD_R1_READY) goto error;
+  }
+
+  sd_unselect();
+  card_type = type;
+  return type;
+
+error:
+  sd_unselect();
+  return SD_TYPE_NONE;
+}
+
+// read 512 bytes of sector to buf, returns 1 on success
+uint8_t sd_read_sector(uint32_t sector, uint8_t *buf){
+  if(card_type == SD_TYPE_NONE) return 0;
+  // byte addressing for not SDHC cards
+  uint32_t address = card_type == SD_TYPE_SDHC ? sector : sector * SD_SECTOR_SIZE;
+
+  sd_select();
+  if(sd_command(SD_CMD17, address) != SD_R1_READY) goto error;
+
+  // wait for data token
+  uint8_t token;
+  uint16_t retry = SD_READ_RETRY;
+  do{
+    token = spi_transfer(0xFF);
+  }while(token == 0xFF && --retry);
+  if(token != SD_DATA_START_BLOCK) goto error;
+
+  for(uint16_t i = 0; i < SD_SECTOR_SIZE; i++){
+    buf[i] = spi_transfer(0xFF);
+  }
+  // CRC is not used
+  spi_send(0xFF);
+  spi_send(0xFF);
+
+  sd_unselect();
+  return 1;
+
+error:
+  sd_unselect();
+  return 0;
+}

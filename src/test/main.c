@@ -7,6 +7,7 @@
 #include "mic.h"
 #include "speaker.h"
 #include "radio.h"
+#include "sd.h"
 
 // keys polling interval, also debounce time
 #define POLL_INTERVAL_MS 20
@@ -24,6 +25,7 @@ static void test_vibro(void);
 static void test_mic(void);
 static void test_speaker(void);
 static void test_radio(void);
+static void test_sd(void);
 
 typedef struct {
   const char *name;
@@ -37,6 +39,7 @@ static const menu_item_t menu[] = {
   {"test mic",    test_mic},
   {"test speaker", test_speaker},
   {"test NRF24L01", test_radio},
+  {"test SD card", test_sd},
 };
 #define MENU_SIZE (sizeof(menu) / sizeof(menu[0]))
 
@@ -222,6 +225,40 @@ static void test_radio(void){
   wait_back();
 }
 
+static void test_sd(void){
+  static uint8_t sector[SD_SECTOR_SIZE];
+  static const char *const type_names[] = {
+    [SD_TYPE_NONE] = "",
+    [SD_TYPE_V1]   = "type SD v1",
+    [SD_TYPE_V2]   = "type SD v2",
+    [SD_TYPE_SDHC] = "type SDHC",
+  };
+
+  display_clear();
+  display_print_line(0, "SD init...");
+
+  uint8_t type = sd_init_card();
+  uint8_t read_ok = type != SD_TYPE_NONE && sd_read_sector(0, sector);
+
+  // SD traffic corrupts display RAM, so draw the whole screen after it
+  display_clear();
+  display_print_line(3, "C - back");
+  if(type == SD_TYPE_NONE){
+    display_print_line(0, "SD init error");
+  }else{
+    display_print_line(1, type_names[type]);
+    if(!read_ok){
+      display_print_line(0, "SD read error");
+    }else if(sector[SD_MBR_SIGNATURE] != 0x55 || sector[SD_MBR_SIGNATURE + 1] != 0xAA){
+      display_print_line(0, "SD no MBR");
+    }else{
+      display_print_line(0, "SD OK");
+      draw_register(2, "part type", sector[SD_MBR_PARTITION_TYPE]);
+    }
+  }
+  wait_back();
+}
+
 int main(void){
   init_keys();
   init_led();
@@ -229,6 +266,7 @@ int main(void){
   init_speaker();
   // CSN high before any SPI traffic, otherwise radio catches display data
   init_radio();
+  init_sd();
   init_display();
   init_mic();
   draw_menu();
