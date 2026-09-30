@@ -3,14 +3,20 @@
 #include "keys.h"
 #include "led.h"
 #include "vibro.h"
+#include "mic.h"
 
 // keys polling interval, also debounce time
 #define POLL_INTERVAL_MS 20
 #define LED_BLINK_INTERVAL_MS 500
+// mic level that fills the whole bar, less than MIC_LEVEL_MAX
+// because loud sound rarely reaches full ADC range
+#define MIC_BAR_FULL_LEVEL 512
+#define MIC_BAR_CHAR '#'
 
 static void test_button(void);
 static void test_led(void);
 static void test_vibro(void);
+static void test_mic(void);
 
 typedef struct {
   const char *name;
@@ -21,6 +27,7 @@ static const menu_item_t menu[] = {
   {"test button", test_button},
   {"test LED",    test_led},
   {"test vibro",  test_vibro},
+  {"test mic",    test_mic},
 };
 #define MENU_SIZE (sizeof(menu) / sizeof(menu[0]))
 
@@ -109,11 +116,37 @@ static void test_vibro(void){
   SET_LOW(VIBRO_PORT, VIBRO_PIN);
 }
 
+static void test_mic(void){
+  char bar[DISPLAY_COLS + 1];
+  uint8_t shown_len = 0xFF;
+
+  display_clear();
+  display_print_line(1, "C - back");
+
+  while(keys_get_press() != C_KEY_PRESSED){
+    uint16_t level = mic_get_level(MIC_LEVEL_SAMPLES);
+    if(level > MIC_BAR_FULL_LEVEL) level = MIC_BAR_FULL_LEVEL;
+    uint8_t len = (uint32_t)level * DISPLAY_COLS / MIC_BAR_FULL_LEVEL;
+
+    // redraw only on change
+    if(len != shown_len){
+      for(uint8_t i = 0; i < len; i++){
+        bar[i] = MIC_BAR_CHAR;
+      }
+      bar[len] = '\0';
+      display_print_line(0, bar);
+      shown_len = len;
+    }
+    _delay_ms(POLL_INTERVAL_MS);
+  }
+}
+
 int main(void){
   init_keys();
   init_led();
   init_vibro();
   init_display();
+  init_mic();
   draw_menu();
 
   while(1){
