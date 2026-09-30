@@ -11,6 +11,13 @@
 // protection against loops of broken ".." chain
 #define MAX_PATH_DEPTH          64
 
+// date and time of the record (there is no clock)
+#define RECORD_CREATE_DATE      16
+#define RECORD_ACCESS_DATE      18
+#define RECORD_WRITE_DATE       24
+// FAT date: (year - 1980) << 9 | month << 5 | day
+#define DEFAULT_DATE            ((2020 - 1980) << 9 | 1 << 5 | 1)
+
 // the first free cluster is searched from here
 static uint16_t alloc_hint = 2;
 
@@ -309,6 +316,43 @@ uint8_t fat16_move(const fat16_entry_t *entry, uint16_t dir_cluster, uint8_t *bu
   return delete_record(entry->record_sector, entry->record_offset, buf);
 }
 
+// subdirectory in dir_cluster by the record (name, attributes, date):
+// a new cluster with "." and "..", the record gets the cluster
+static uint8_t new_dir(uint16_t dir_cluster, uint8_t *rec, uint16_t *cluster, uint8_t *buf){
+  uint16_t dir;
+  uint8_t error;
+
+  if((error = alloc_cluster(0, &dir, buf))) return error;
+  if((error = zero_cluster(dir, buf))){
+    free_chain(dir, buf);
+    return error;
+  }
+
+  // "." and ".." with the date and time of the directory, buf is zero
+  memcpy(buf + DOT_OFFSET, rec, FAT16_RECORD_SIZE);
+  memset(buf + DOT_OFFSET, ' ', FAT16_RAW_NAME_SIZE);
+  buf[DOT_OFFSET] = '.';
+  put16(buf, DOT_OFFSET + FAT16_CLUSTER_OFFSET, dir);
+  put32(buf, DOT_OFFSET + FAT16_SIZE_OFFSET, 0);
+  memcpy(buf + DOTDOT_OFFSET, buf + DOT_OFFSET, FAT16_RECORD_SIZE);
+  buf[DOTDOT_OFFSET + 1] = '.';
+  put16(buf, DOTDOT_OFFSET + FAT16_CLUSTER_OFFSET,
+        dir_cluster == FAT16_ROOT_CLUSTER ? ROOT_PARENT_CLUSTER : dir_cluster);
+  if(!sd_write_sector(fat16_cluster_sector(dir), buf)){
+    free_chain(dir, buf);
+    return FAT16_ERROR_IO;
+  }
+
+  put16(rec, FAT16_CLUSTER_OFFSET, dir);
+  put32(rec, FAT16_SIZE_OFFSET, 0);
+  if((error = dir_add(dir_cluster, rec, buf))){
+    free_chain(dir, buf);
+    return error;
+  }
+  *cluster = dir;
+  return FAT16_OK;
+}
+
 static uint8_t copy_entry(const fat16_entry_t *entry, uint16_t dir_cluster, uint8_t *buf, uint8_t depth){
   uint16_t src = entry->cluster;
   uint16_t copy;
@@ -327,26 +371,7 @@ static uint8_t copy_entry(const fat16_entry_t *entry, uint16_t dir_cluster, uint
   }
 
   if(depth == FAT16_EDIT_DEPTH) return FAT16_ERROR_DEPTH;
-  if((error = alloc_cluster(0, &copy, buf))) return error;
-  if((error = zero_cluster(copy, buf))) return error;
-
-  // "." and ".." with the date and time of the directory, buf is zero
-  memcpy(buf + DOT_OFFSET, record, FAT16_RECORD_SIZE);
-  memset(buf + DOT_OFFSET, ' ', FAT16_RAW_NAME_SIZE);
-  buf[DOT_OFFSET] = '.';
-  put16(buf, DOT_OFFSET + FAT16_CLUSTER_OFFSET, copy);
-  memcpy(buf + DOTDOT_OFFSET, buf + DOT_OFFSET, FAT16_RECORD_SIZE);
-  buf[DOTDOT_OFFSET + 1] = '.';
-  put16(buf, DOTDOT_OFFSET + FAT16_CLUSTER_OFFSET,
-        dir_cluster == FAT16_ROOT_CLUSTER ? ROOT_PARENT_CLUSTER : dir_cluster);
-  if(!sd_write_sector(fat16_cluster_sector(copy), buf)) return FAT16_ERROR_IO;
-
-  put16(record, FAT16_CLUSTER_OFFSET, copy);
-  put32(record, FAT16_SIZE_OFFSET, 0);
-  if((error = dir_add(dir_cluster, record, buf))){
-    free_chain(copy, buf);
-    return error;
-  }
+  if((error = new_dir(dir_cluster, record, &copy, buf))) return error;
 
   // entry may be the shared child: only src is used from here
   for(uint16_t i = 0; fat16_dir_read(src, i, &child, 1, buf); i++){
@@ -375,4 +400,19 @@ uint8_t fat16_rename(const fat16_entry_t *entry, const uint8_t *raw, uint8_t *bu
   delete_long_name(buf, entry->record_offset);
   if(!sd_write_sector(entry->record_sector, buf)) return FAT16_ERROR_IO;
   return FAT16_OK;
+}
+
+// new empty directory with raw name (8 + 3 chars with spaces) in dir_cluster
+uint8_t fat16_mkdir(uint16_t dir_cluster, const uint8_t *raw, uint8_t *buf){
+  uint16_t cluster;
+
+  if(name_exists(dir_cluster, raw, 0, 0, buf)) return FAT16_ERROR_EXISTS;
+
+  memset(record, 0, FAT16_RECORD_SIZE);
+  memcpy(record, raw, FAT16_RAW_NAME_SIZE);
+  record[FAT16_ATTR_OFFSET] = FAT16_ATTR_DIRECTORY;
+  put16(record, RECORD_CREATE_DATE, DEFAULT_DATE);
+  put16(record, RECORD_ACCESS_DATE, DEFAULT_DATE);
+  put16(record, RECORD_WRITE_DATE, DEFAULT_DATE);
+  return new_dir(dir_cluster, record, &cluster, buf);
 }

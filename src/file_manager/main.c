@@ -24,7 +24,8 @@
 #define ACTION_COPY   2
 #define ACTION_RENAME 3
 #define ACTION_DELETE 4
-#define ACTIONS       5
+#define ACTION_MKDIR  5
+#define ACTIONS       6
 #define ACTION_NONE   0xFF
 
 // chars of short (8.3) names for rename, space is the end of name
@@ -159,7 +160,7 @@ static uint8_t same_record(const fat16_entry_t *a, const fat16_entry_t *b){
 
 // list of actions, returns the chosen one or ACTION_NONE on C
 static uint8_t context_menu(const fat16_entry_t *entry){
-  static const char names[ACTIONS][7] PROGMEM = {"", "move", "copy", "rename", "delete"};
+  static const char names[ACTIONS][9] PROGMEM = {"", "move", "copy", "rename", "delete", "make dir"};
   char paste[DISPLAY_COLS + 1];
   uint8_t actions[ACTIONS];
   uint8_t count = 0;
@@ -171,12 +172,14 @@ static uint8_t context_menu(const fat16_entry_t *entry){
     action_line(paste, PSTR("paste "), clip.name);
     actions[count++] = ACTION_PASTE;
   }
+  // actions for the selected entry
   if(entry->name[0]){
-    for(uint8_t action = ACTION_MOVE; action < ACTIONS; action++){
+    for(uint8_t action = ACTION_MOVE; action <= ACTION_DELETE; action++){
       actions[count++] = action;
     }
   }
-  if(!count) return ACTION_NONE;
+  // make dir in the current directory, even in the empty one
+  actions[count++] = ACTION_MKDIR;
 
   while(1){
     // keep selected item on the screen
@@ -281,16 +284,14 @@ static void pack_name(uint8_t *part, uint8_t size){
   memset(part + len, ' ', size - len);
 }
 
-// UP / DOWN - char, LEFT / RIGHT - position, A - ok, C - cancel
-static void rename(const fat16_entry_t *entry){
+// editor of 8.3 name, title is in flash, raw is the start name and the result:
+// UP / DOWN - char, LEFT / RIGHT - position, A - ok, C - cancel.
+// returns 1 on A with not empty name
+static uint8_t edit_name(const char *title, uint8_t *raw){
   static const char chars[] PROGMEM = NAME_CHARS;
-  uint8_t raw[FAT16_RAW_NAME_SIZE];
-  uint8_t old[FAT16_RAW_NAME_SIZE];
   uint8_t pos = 0;
 
-  fat16_raw_name(entry, raw);
-  memcpy(old, raw, sizeof(raw));
-  display_print_line_P(0, PSTR("rename"));
+  display_print_line_P(0, title);
   display_print_line_P(3, PSTR("A-ok C-cancel"));
 
   while(1){
@@ -299,7 +300,7 @@ static void rename(const fat16_entry_t *entry){
     const char *c = strchr_P(chars, raw[pos]);
     uint8_t index = c ? c - chars : 0;
     uint8_t key = wait_key();
-    if(key == C_KEY_PRESSED) return;
+    if(key == C_KEY_PRESSED) return 0;
     if(key == A_KEY_PRESSED) break;
     switch(key){
       case UP_KEY_PRESSED:
@@ -323,8 +324,18 @@ static void rename(const fat16_entry_t *entry){
   pack_name(raw + FAT16_NAME_SIZE, FAT16_EXT_SIZE);
   if(raw[0] == ' '){
     message(PSTR("empty name"), NULL);
-    return;
+    return 0;
   }
+  return 1;
+}
+
+static void rename(const fat16_entry_t *entry){
+  uint8_t raw[FAT16_RAW_NAME_SIZE];
+  uint8_t old[FAT16_RAW_NAME_SIZE];
+
+  fat16_raw_name(entry, raw);
+  memcpy(old, raw, sizeof(raw));
+  if(!edit_name(PSTR("rename"), raw)) return;
   if(!memcmp(raw, old, sizeof(raw))) return;
 
   draw_name_screen(PSTR("renaming..."), entry->name, PSTR(""), PSTR(""));
@@ -336,6 +347,17 @@ static void rename(const fat16_entry_t *entry){
     }
   }
   show_error(error);
+}
+
+// new directory in the current one, the name starts empty
+static void make_dir(void){
+  uint8_t raw[FAT16_RAW_NAME_SIZE];
+
+  memset(raw, ' ', sizeof(raw));
+  if(!edit_name(PSTR("make dir"), raw)) return;
+
+  draw_screen(PSTR("creating..."), PSTR(""), PSTR(""), PSTR(""));
+  show_error(fat16_mkdir(file_browser_dir(), raw, sector));
 }
 
 static void run_action(uint8_t action, const fat16_entry_t *entry){
@@ -356,6 +378,9 @@ static void run_action(uint8_t action, const fat16_entry_t *entry){
       break;
     case ACTION_DELETE:
       delete(entry);
+      break;
+    case ACTION_MKDIR:
+      make_dir();
       break;
   }
 }

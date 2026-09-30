@@ -31,5 +31,6 @@ uint8_t fat16_delete(const fat16_entry_t *entry, uint8_t *buf);
 uint8_t fat16_move(const fat16_entry_t *entry, uint16_t dir_cluster, uint8_t *buf);
 uint8_t fat16_copy(const fat16_entry_t *entry, uint16_t dir_cluster, uint8_t *buf);
 uint8_t fat16_rename(const fat16_entry_t *entry, const uint8_t *raw, uint8_t *buf);
+uint8_t fat16_mkdir(uint16_t dir_cluster, const uint8_t *raw, uint8_t *buf);
 
 #endif
