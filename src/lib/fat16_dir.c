@@ -168,3 +168,33 @@ uint8_t fat16_dir_read(uint16_t dir_cluster, uint16_t first,
 uint8_t fat16_is_dir(const fat16_entry_t *entry){
   return entry->attr & FAT16_ATTR_DIRECTORY;
 }
+
+void fat16_file_open(fat16_file_t *file, uint16_t cluster, uint32_t size){
+  file->cluster = cluster;
+  file->sector = cluster_sector(cluster);
+  file->cluster_sector = 0;
+  file->left = size;
+}
+
+// read next sector of file to buf, len = valid bytes in buf (0 at the end).
+// returns 0 on read error or broken FAT chain
+uint8_t fat16_file_read(fat16_file_t *file, uint8_t *buf, uint16_t *len){
+  *len = 0;
+  if(!file->left) return 1;
+
+  // cluster is over: go to the next one by FAT chain
+  if(file->cluster_sector == volume.cluster_sectors){
+    file->cluster = next_cluster(file->cluster, buf);
+    if(!file->cluster) return 0;
+    file->sector = cluster_sector(file->cluster);
+    file->cluster_sector = 0;
+  }
+
+  if(!sd_read_sector(file->sector, buf)) return 0;
+  file->sector++;
+  file->cluster_sector++;
+
+  *len = file->left < SD_SECTOR_SIZE ? file->left : SD_SECTOR_SIZE;
+  file->left -= *len;
+  return 1;
+}

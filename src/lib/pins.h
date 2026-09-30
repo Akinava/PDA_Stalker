@@ -60,6 +60,12 @@
 #define SPEAKER_PORT PORTD
 #define SPEAKER_PIN PD5
 
+// ISP: RESET of the other board on the connector (female master, "rst"),
+// the same pin as SPEAKER
+#define ISP_RESET_DDR DDRD
+#define ISP_RESET_PORT PORTD
+#define ISP_RESET_PIN PD5
+
 // MICROPHONE
 #define MICROPHONE_DDR DDRC
 #define MICROPHONE_PORT PORTC

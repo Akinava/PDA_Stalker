@@ -25,6 +25,7 @@ SOURCES += $(LIB_DIR)/keys.c
 SOURCES += $(LIB_DIR)/radio.c
 SOURCES += $(LIB_DIR)/sd.c
 SOURCES += $(LIB_DIR)/fat16_dir.c
+SOURCES += $(LIB_DIR)/file_browser.c
 SOURCES += $(LIB_DIR)/loader.c
 #=======================================
 

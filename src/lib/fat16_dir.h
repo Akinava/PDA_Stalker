@@ -34,11 +34,21 @@ typedef struct {
   uint32_t size;
 } fat16_entry_t;
 
+// sequential reading of file by FAT chain
+typedef struct {
+  uint16_t cluster;
+  uint32_t sector;
+  uint8_t cluster_sector;     // sector number in the current cluster
+  uint32_t left;              // bytes left to read
+} fat16_file_t;
+
 // buf is 512 byte work buffer in all functions
 uint8_t fat16_mount(uint8_t *buf);
 uint16_t fat16_dir_count(uint16_t dir_cluster, uint8_t *buf);
 uint8_t fat16_dir_read(uint16_t dir_cluster, uint16_t first,
                        fat16_entry_t *entries, uint8_t count, uint8_t *buf);
 uint8_t fat16_is_dir(const fat16_entry_t *entry);
+void fat16_file_open(fat16_file_t *file, uint16_t cluster, uint32_t size);
+uint8_t fat16_file_read(fat16_file_t *file, uint8_t *buf, uint16_t *len);
 
 #endif
