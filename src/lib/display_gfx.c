@@ -208,6 +208,11 @@ static uint8_t glyph_index(uint8_t c){
   return GFX_SPECIAL_INDEX + DISPLAY_GFX_UNKNOWN - DISPLAY_GFX_NEWLINE;
 }
 
+// 5 columns of the glyph in flash (bit 0 is the top pixel)
+const uint8_t *display_gfx_font_glyph(uint8_t c){
+  return font[glyph_index(c)];
+}
+
 // glyph of the unicode char: ASCII, cyrillic, else the unknown glyph
 uint8_t display_gfx_glyph(uint16_t code){
   if(code >= GFX_FIRST_CHAR && code <= GFX_LAST_CHAR) return code;
