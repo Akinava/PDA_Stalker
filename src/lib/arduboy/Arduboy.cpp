@@ -46,9 +46,12 @@ static const uint16_t * volatile tone_seq;
 static const uint16_t *tone_seq_start;
 static bool tone_seq_in_ram;
 
-// GDRAM line checksums: the line is sent only if it is changed
+// GDRAM line checksums: the line is sent only if it is changed.
+// -DARDUBOY_NO_LINE_HASH saves RAM for games that redraw the whole screen
+#ifndef ARDUBOY_NO_LINE_HASH
 static uint16_t line_hash[LCD_GDRAM_LINES];
 static bool hash_valid;
+#endif
 
 static uint16_t tone_seq_read(void){
   const uint16_t *p = tone_seq;
@@ -165,7 +168,9 @@ void Arduboy::begin(void){
   init_display();
   display_gfx_on();
   LCD_SPI_FAST();
+#ifndef ARDUBOY_NO_LINE_HASH
   hash_valid = false;
+#endif
   init_timer();
 
   setFrameRate(60);
@@ -327,6 +332,7 @@ void Arduboy::paintScreen(const uint8_t *image){
     convert_row(image, y, line, invert_mask);
     convert_row(image, y + LCD_GDRAM_LINES, line + LCD_LINE_BYTES, invert_mask);
 
+#ifndef ARDUBOY_NO_LINE_HASH
     // Fletcher-16
     uint8_t sum1 = 0, sum2 = 0;
     for(uint8_t i = 0; i < sizeof(line); i++){
@@ -336,6 +342,7 @@ void Arduboy::paintScreen(const uint8_t *image){
     uint16_t hash = (sum2 << 8) | sum1;
     if(hash_valid && line_hash[y] == hash) continue;
     line_hash[y] = hash;
+#endif
 
     display_send_command(LCD_SET_ADDRESS | y);
     display_send_command(LCD_SET_ADDRESS | 0);
@@ -349,7 +356,9 @@ void Arduboy::paintScreen(const uint8_t *image){
     }
     SET_LOW(LCD_PORT, LCD_CS);
   }
+#ifndef ARDUBOY_NO_LINE_HASH
   hash_valid = true;
+#endif
 }
 
 /********************************** drawing **********************************/
