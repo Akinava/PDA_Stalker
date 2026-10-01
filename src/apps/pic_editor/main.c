@@ -38,8 +38,12 @@
 // new image
 #define NEW_WIDTH 128
 #define NEW_HEIGHT 64
-#define SIZE_STEP 8
+#define IMAGE_SIZE_MIN 1
 #define IMAGE_SIZE_MAX 2048
+// size editor: 4 digits of width, then 4 digits of height
+#define SIZE_DIGITS 4
+#define SIZE_WIDTH_COL 2
+#define SIZE_HEIGHT_COL 11
 
 #define PEN_OFF 0
 #define PEN_BLACK 1
@@ -698,37 +702,57 @@ static void open_image(void){
   has_file = 1;
 }
 
-// UP / DOWN - the size, LEFT / RIGHT - width or height, A - ok, C - cancel
+// any size IMAGE_SIZE_MIN..IMAGE_SIZE_MAX by digits: "W:0128   H:0064".
+// UP / DOWN - the digit, LEFT / RIGHT - the next digit, A - ok, C - cancel
 static uint8_t size_edit(uint16_t *w, uint16_t *h){
-  uint8_t field = 0;
+  static const uint16_t powers[SIZE_DIGITS] PROGMEM = {1000, 100, 10, 1};
+  // the units of the width at the start
+  uint8_t digit = SIZE_DIGITS - 1;
 
-  display_print_line_P(0, PSTR("new image"));
+  display_print_line_P(0, PSTR("new image size"));
   display_print_line_P(3, PSTR("A-ok C-cancel"));
   ui_wait_release();
   while(1){
     char line[DISPLAY_COLS + 1];
-    strcpy_P(line, field ? PSTR(" width  ") : PSTR(">width  "));
-    utoa(*w, line + strlen(line), 10);
+    uint16_t values[2] = {*w, *h};
+    memset(line, ' ', DISPLAY_COLS);
+    line[DISPLAY_COLS] = '\0';
+    line[SIZE_WIDTH_COL - 2] = 'W';
+    line[SIZE_HEIGHT_COL - 2] = 'H';
+    line[SIZE_WIDTH_COL - 1] = line[SIZE_HEIGHT_COL - 1] = ':';
+    for(uint8_t field = 0; field < 2; field++){
+      uint8_t col = field ? SIZE_HEIGHT_COL : SIZE_WIDTH_COL;
+      for(uint8_t i = 0; i < SIZE_DIGITS; i++){
+        line[col + i] = '0' + values[field] / pgm_read_word(&powers[i]) % 10;
+      }
+    }
     display_print_line(1, line);
-    strcpy_P(line, field ? PSTR(">height ") : PSTR(" height "));
-    utoa(*h, line + strlen(line), 10);
+    // the edited digit is marked on the next line
+    memset(line, ' ', DISPLAY_COLS);
+    line[digit < SIZE_DIGITS ? SIZE_WIDTH_COL + digit : SIZE_HEIGHT_COL + digit - SIZE_DIGITS] = '^';
     display_print_line(2, line);
 
     uint8_t key;
     while((key = keys_get_repeat(POLL_INTERVAL_MS)) == NOOP){
       _delay_ms(POLL_INTERVAL_MS);
     }
-    uint16_t *value = field ? h : w;
+    uint16_t *value = digit < SIZE_DIGITS ? w : h;
+    uint16_t power = pgm_read_word(&powers[digit % SIZE_DIGITS]);
+    uint8_t current = *value / power % 10;
+    int32_t changed = *value;
     switch(key){
+      // the digit goes round 0..9, the others do not change
       case UP_KEY_PRESSED:
-        if(*value + SIZE_STEP <= IMAGE_SIZE_MAX) *value += SIZE_STEP;
+        changed += current == 9 ? -9L * power : power;
         break;
       case DOWN_KEY_PRESSED:
-        if(*value > SIZE_STEP) *value -= SIZE_STEP;
+        changed -= current == 0 ? -9L * power : power;
         break;
       case LEFT_KEY_PRESSED:
+        digit = (digit + 2 * SIZE_DIGITS - 1) % (2 * SIZE_DIGITS);
+        break;
       case RIGHT_KEY_PRESSED:
-        field ^= 1;
+        digit = (digit + 1) % (2 * SIZE_DIGITS);
         break;
       case A_KEY_PRESSED:
         ui_wait_release();
@@ -737,6 +761,9 @@ static uint8_t size_edit(uint16_t *w, uint16_t *h){
         ui_wait_release();
         return 0;
     }
+    if(changed < IMAGE_SIZE_MIN) changed = IMAGE_SIZE_MIN;
+    if(changed > IMAGE_SIZE_MAX) changed = IMAGE_SIZE_MAX;
+    *value = changed;
   }
 }
 
