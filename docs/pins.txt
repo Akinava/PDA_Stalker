@@ -1,4 +1,4 @@
-=== Atmega328
+=== Atmega328p
 N   ARDU  pin           descr
 01        PC6           RESET
 02   0    PD0  TX       LED
@@ -31,13 +31,13 @@ N   ARDU  pin           descr
 
 === SPEAKER
 VCC - 2N2222 - (+ SPEAKER -) - GND
-                       |
-                      PD5
+        |
+       PD5
 
 === VIBRO MOTOR
 VCC - 2N2222 - (+ vibro motor -) - GND
-                       |
-                      PC2
+        |
+       PC2
 
 === LED
 GND - resistor(200Ω) - LED - PD0
@@ -65,10 +65,12 @@ GND + capacitor(22pF) --------+--------- OSC1
 |  GND*| - GND
 +------+
 
-=== DC - DC3.3
- IN - BATTERY
-OUT - VCC
-GND - GND
+=== HT7333
++----+
+| VIN|--- HT7333 VIN
+|VOUT|--- VCC
+| GND|--- GND
++----+
 
 === buttons
 GND - button left  - PB0
@@ -88,7 +90,7 @@ GND - button right - PD7
 |   AR*| - 
 +------+ -
 
-=== (connector) female master (top)
+=== (connector) female master (top) Standard Card Edge Connectors CONN SEC II 8 POS 100C/L
 VCC   - VCC
 GND   - GND
 SDA   - PC4
@@ -131,3 +133,15 @@ RESET - PC6 (RESET)
 |  BLA*| - VCC
 |  BLK*| - GND
 +------+
+=== 18650 TP4056 Lithium Battery Charger Module
++-------+
+|--+   *| - TP4056 (+)
+|U |   *| - LiPo 18650 (+)
+|S |    |
+|B |   *| - LiPo 18650 (-)
+|--+   *| - GND
++-------+
+=== power switch
+              +-------+
+HT7333 VIN ---|       |--- TP4056 (+)
+              +-------+
