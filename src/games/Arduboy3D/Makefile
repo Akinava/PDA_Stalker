@@ -35,7 +35,6 @@ CPP_SOURCES += Player.cpp
 CPP_SOURCES += Projectile.cpp
 CPP_SOURCES += Sounds.cpp
 CPP_SOURCES += $(ARDUBOY_DIR)/Arduboy.cpp
-CPP_SOURCES += $(ARDUBOY_DIR)/Arduboy2.cpp
 CPP_SOURCES += $(ARDUBOY_DIR)/Sprites.cpp
 
 SOURCES = $(LIB_DIR)/spi.c
@@ -100,11 +99,12 @@ help:
 $(BUILD_DIR):
 	mkdir -p $@
 
-$(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -mmcu=$(MCU) -c $< -o $@
-
+# the game sources go first: a game file can have the name of a library one
 $(BUILD_DIR)/%.o: %.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -mmcu=$(MCU) -c $< -o $@
+
+$(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -mmcu=$(MCU) -c $< -o $@
 
 $(TARGET).elf: $(OBJECTS)
 	$(CXX) $(CXXFLAGS) -mmcu=$(MCU) $(LDFLAGS) -o $@ $(OBJECTS)

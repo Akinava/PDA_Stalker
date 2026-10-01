@@ -14,7 +14,9 @@
 typedef bool boolean;
 typedef uint8_t byte;
 
-#define F(str) (str)
+// as Arduino: F("text") is in flash, print() has an overload for it
+class __FlashStringHelper;
+#define F(str) (reinterpret_cast<const __FlashStringHelper *>(PSTR(str)))
 
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -27,12 +29,17 @@ typedef uint8_t byte;
 unsigned long millis(void);
 void delay(unsigned long ms);
 
+// as Arduino: avr-libc random(), randomSeed() seeds it
+static inline void randomSeed(unsigned long seed){
+  if(seed) srandom(seed);
+}
+
 static inline long random(long max_value){
-  return max_value ? rand() % max_value : 0;
+  return max_value ? random() % max_value : 0;
 }
 
 static inline long random(long min_value, long max_value){
-  return min_value + random(max_value - min_value);
+  return min_value < max_value ? min_value + random(max_value - min_value) : min_value;
 }
 
 #endif

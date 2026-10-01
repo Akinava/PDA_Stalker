@@ -35,7 +35,14 @@ extern "C" {
 // millis: Timer2 CTC, 16 MHz / 64 / 250 = 1 kHz
 #define TIMER2_TOP              249
 
+#define LCD_GRAPHIC_ON          0x36    // extended instruction set, graphics on
+
 #define EXIT_POLL_INTERVAL_MS   20
+// the window is on text rows 1, 2 (8x16 font): screen rows 16..47
+#define EXIT_TOP                16
+#define EXIT_BOTTOM             48
+
+bool ArduboyAudio::audio_enabled;
 
 static volatile unsigned long timer_millis;
 
@@ -150,7 +157,7 @@ bool arduboy_tone_playing(void){
 }
 
 void ArduboyTunes::tone(unsigned int freq, unsigned long duration){
-  arduboy_tone(freq, duration);
+  if(ArduboyAudio::enabled()) arduboy_tone(freq, duration);
 }
 
 void ArduboyTunes::noTone(void){
@@ -173,7 +180,9 @@ void Arduboy::begin(void){
 #endif
   init_timer();
 
+  audio.begin();
   setFrameRate(60);
+  textSize = 1;
   textWrap = false;
   inverted = false;
   clear();
@@ -188,6 +197,7 @@ void Arduboy::boot(void){
 }
 
 uint8_t Arduboy::getInput(void){
+  checkExit();
   uint8_t buttons = 0;
   if(CHECK_PIN(BUTTON_LEFT_PINS, BUTTON_LEFT_PIN)) buttons |= LEFT_BUTTON;
   if(CHECK_PIN(BUTTON_RIGHT_PINS, BUTTON_RIGHT_PIN)) buttons |= RIGHT_BUTTON;
@@ -214,11 +224,16 @@ void Arduboy::setFrameRate(uint8_t rate){
   eachFrameMillis = 1000 / rate;
 }
 
-bool Arduboy::nextFrame(void){
+// games poll keys in own loops (menus), so C is checked in getInput too
+void Arduboy::checkExit(void){
   static bool c_was_pressed;
   bool c_pressed = CHECK_PIN(BUTTON_C_PINS, BUTTON_C_PIN);
   if(c_pressed && !c_was_pressed) exitMenu();
   c_was_pressed = c_pressed;
+}
+
+bool Arduboy::nextFrame(void){
+  checkExit();
 
   unsigned long now = millis();
   if((long)(now - nextFrameStart) < 0) return false;
@@ -238,7 +253,9 @@ void Arduboy::initRandomSeed(void){
   for(uint8_t i = 0; i < 32; i++){
     seed = (seed << 1) ^ mic_read();
   }
-  srand((unsigned int)(seed ^ (seed >> 16) ^ TCNT2));
+  seed ^= (seed >> 16) ^ TCNT2;
+  srand((unsigned int)seed);
+  randomSeed(seed);
 }
 
 // the PDA has one LED
@@ -256,34 +273,37 @@ void Arduboy::invert(bool inverse){
 }
 
 // modal "EXIT APP?" window: C loads the default app (file manager),
-// any other key returns to the game
+// any other key returns to the game. The window is the text layer of ST7920
+// over blanked graphics: the frame buffer of the game is not changed
 void Arduboy::exitMenu(void){
   uint8_t key;
-  const uint8_t box_x = 14, box_y = 18, box_w = WIDTH - 2 * box_x, box_h = 28;
 
   tunes.noTone();
-  fillRect(box_x, box_y, box_w, box_h, BLACK);
-  drawRect(box_x, box_y, box_w, box_h, WHITE);
-  setCursor((WIDTH - 9 * 6) / 2, box_y + 6);
-  print("EXIT APP?");
-  setCursor((WIDTH - 7 * 6) / 2, box_y + 15);
-  print("C - YES");
-  display();
+  paintRows(sBuffer, EXIT_TOP, EXIT_BOTTOM);
+  // basic instruction set: graphics stays on, the text is shown over it
+  display_send_command(LCD_BASIC_FUNCTION);
+  display_print_line_P(1, PSTR("   EXIT APP?"));
+  display_print_line_P(2, PSTR("   C - YES"));
+  LCD_SPI_FAST();
 
   while(keys_read() == C_KEY_PRESSED) _delay_ms(EXIT_POLL_INTERVAL_MS);
   while((key = keys_read()) == NOOP) _delay_ms(EXIT_POLL_INTERVAL_MS);
 
   if(key == C_KEY_PRESSED && loader_is_present()){
-    clear();
-    display();
+    display_print_line_P(1, PSTR("   loading..."));
+    display_print_line_P(2, PSTR(""));
     // back to the text mode and the speed of the libraries
     display_send_command(LCD_EXTENDED_FUNCTION);
     display_send_command(LCD_BASIC_FUNCTION);
     init_spi();
-    display_clear();
-    display_print_line_P(1, PSTR("   loading..."));
     loader_load_default_app();
   }
+
+  display_clear();
+  display_send_command(LCD_EXTENDED_FUNCTION);
+  display_send_command(LCD_GRAPHIC_ON);
+  LCD_SPI_FAST();
+  paintRows(sBuffer, 0, 0);
 
   // the key must not get into the game
   while(keys_read() != NOOP) _delay_ms(EXIT_POLL_INTERVAL_MS);
@@ -325,12 +345,24 @@ static void convert_row(const uint8_t *image, uint8_t y, uint8_t *line, uint8_t 
 }
 
 void Arduboy::paintScreen(const uint8_t *image){
+  paintRows(image, 0, 0);
+}
+
+// screen rows blank_top..blank_bottom - 1 are sent empty (for the exit window).
+// The checksum is of the sent line, so blanked lines are restored by the next paint
+void Arduboy::paintRows(const uint8_t *image, uint8_t blank_top, uint8_t blank_bottom){
   uint8_t line[2 * LCD_LINE_BYTES];
   uint8_t invert_mask = inverted ? 0xFF : 0x00;
 
   for(uint8_t y = 0; y < LCD_GDRAM_LINES; y++){
-    convert_row(image, y, line, invert_mask);
-    convert_row(image, y + LCD_GDRAM_LINES, line + LCD_LINE_BYTES, invert_mask);
+    for(uint8_t half = 0; half < 2; half++){
+      uint8_t row = y + half * LCD_GDRAM_LINES;
+      if(row >= blank_top && row < blank_bottom){
+        memset(line + half * LCD_LINE_BYTES, 0, LCD_LINE_BYTES);
+      }else{
+        convert_row(image, row, line + half * LCD_LINE_BYTES, invert_mask);
+      }
+    }
 
 #ifndef ARDUBOY_NO_LINE_HASH
     // Fletcher-16
@@ -493,30 +525,39 @@ void Arduboy::setTextWrap(bool wrap){
   textWrap = wrap;
 }
 
-void Arduboy::drawChar(int16_t x, int16_t y, unsigned char c, uint8_t color, uint8_t bg){
+void Arduboy::setTextSize(uint8_t size){
+  textSize = size ? size : 1;
+}
+
+// size: every pixel of the font is size x size
+void Arduboy::drawChar(int16_t x, int16_t y, unsigned char c, uint8_t color, uint8_t bg, uint8_t size){
   const uint8_t *glyph = display_gfx_font_glyph(c);
   for(uint8_t i = 0; i < DISPLAY_GFX_CELL_WIDTH; i++){
     uint8_t column = i < DISPLAY_GFX_FONT_WIDTH ? pgm_read_byte(glyph + i) : 0;
     for(uint8_t j = 0; j < DISPLAY_GFX_CELL_HEIGHT; j++, column >>= 1){
-      if(column & 1){
-        drawPixel(x + i, y + j, color);
-      }else if(bg != color){
-        drawPixel(x + i, y + j, bg);
+      uint8_t pixel_color = column & 1 ? color : bg;
+      if(!(column & 1) && bg == color) continue;
+      if(size == 1){
+        drawPixel(x + i, y + j, pixel_color);
+      }else{
+        fillRect(x + i * size, y + j * size, size, size, pixel_color);
       }
     }
   }
 }
 
 size_t Arduboy::write(uint8_t c){
+  uint8_t cell_width = DISPLAY_GFX_CELL_WIDTH * textSize;
+  uint8_t cell_height = DISPLAY_GFX_CELL_HEIGHT * textSize;
   if(c == '\n'){
     cursorX = 0;
-    cursorY += DISPLAY_GFX_CELL_HEIGHT;
+    cursorY += cell_height;
   }else if(c != '\r'){
-    drawChar(cursorX, cursorY, c, WHITE, BLACK);
-    cursorX += DISPLAY_GFX_CELL_WIDTH;
-    if(textWrap && cursorX > WIDTH - DISPLAY_GFX_CELL_WIDTH){
+    drawChar(cursorX, cursorY, c, WHITE, BLACK, textSize);
+    cursorX += cell_width;
+    if(textWrap && cursorX > WIDTH - cell_width){
       cursorX = 0;
-      cursorY += DISPLAY_GFX_CELL_HEIGHT;
+      cursorY += cell_height;
     }
   }
   return 1;
@@ -529,6 +570,14 @@ size_t Arduboy::print(char c){
 size_t Arduboy::print(const char *str){
   size_t n = 0;
   while(*str) n += write(*str++);
+  return n;
+}
+
+size_t Arduboy::print(const __FlashStringHelper *str){
+  const char *p = reinterpret_cast<const char *>(str);
+  size_t n = 0;
+  char c;
+  while((c = pgm_read_byte(p++))) n += write(c);
   return n;
 }
 

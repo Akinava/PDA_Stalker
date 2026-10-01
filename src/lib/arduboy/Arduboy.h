@@ -5,7 +5,8 @@
 // ST7920 128x64 instead of SSD1306, keys, speaker and LED of the PDA.
 // Frame buffer has the Arduboy layout: 8 pages of 128 bytes,
 // one byte is a column of 8 pixels, bit 0 is the top pixel.
-// C key opens "EXIT APP?" window (in nextFrame), C again loads the file manager
+// C key opens "EXIT APP?" window (keys polling and nextFrame),
+// C again loads the file manager
 
 #include "Arduino.h"
 // as in Arduboy library, games use EEPROM without include
@@ -40,9 +41,35 @@ void arduboy_tones(const uint16_t *tones, bool in_ram);
 void arduboy_no_tone(void);
 bool arduboy_tone_playing(void);
 
+// EEPROM byte of the sound on / off state, the same as in Arduboy and Arduboy2
+#define EEPROM_AUDIO_ON_OFF 2
+
+class ArduboyAudio {
+  public:
+    // fresh EEPROM (0xFF) is "on"
+    static void begin(void){
+      audio_enabled = EEPROM.read(EEPROM_AUDIO_ON_OFF) != 0;
+    }
+    static void on(void){ audio_enabled = true; }
+    static void off(void){
+      audio_enabled = false;
+      arduboy_no_tone();
+    }
+    static void toggle(void){
+      if(audio_enabled) off(); else on();
+    }
+    static void saveOnOff(void){
+      EEPROM.update(EEPROM_AUDIO_ON_OFF, audio_enabled);
+    }
+    static bool enabled(void){ return audio_enabled; }
+
+  private:
+    static bool audio_enabled;
+};
+
 class ArduboyTunes {
   public:
-    // square wave freq Hz for duration ms (0 - until noTone)
+    // square wave freq Hz for duration ms (0 - until noTone), only if audio is on
     void tone(unsigned int freq, unsigned long duration);
     void noTone(void);
 };
@@ -50,6 +77,7 @@ class ArduboyTunes {
 class Arduboy {
   public:
     ArduboyTunes tunes;
+    ArduboyAudio audio;
 
     void begin(void);
     void beginNoLogo(void);
@@ -89,10 +117,12 @@ class Arduboy {
     // text: 5x7 font in 6x8 cells, the cell background is cleared
     void setCursor(int16_t x, int16_t y);
     void setTextWrap(bool wrap);
-    void drawChar(int16_t x, int16_t y, unsigned char c, uint8_t color, uint8_t bg);
+    void setTextSize(uint8_t size);
+    void drawChar(int16_t x, int16_t y, unsigned char c, uint8_t color, uint8_t bg, uint8_t size = 1);
     size_t write(uint8_t c);
     size_t print(char c);
     size_t print(const char *str);
+    size_t print(const __FlashStringHelper *str);
     size_t print(unsigned char n);
     size_t print(int n);
     size_t print(unsigned int n);
@@ -109,11 +139,14 @@ class Arduboy {
     unsigned long nextFrameStart;
     int16_t cursorX;
     int16_t cursorY;
+    uint8_t textSize;
     bool textWrap;
     bool inverted;
 
     size_t printNumber(unsigned long n);
+    void checkExit(void);
     void exitMenu(void);
+    void paintRows(const uint8_t *image, uint8_t blank_top, uint8_t blank_bottom);
 };
 
 #endif
