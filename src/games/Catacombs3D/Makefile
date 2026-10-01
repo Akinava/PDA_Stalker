@@ -19,7 +19,7 @@ BOOT_DIR = ../../bootloader
 SD_GAMES_DIR = ../../../sd/GAMES
 BUILD_DIR = build
 
-# game sources from Arduboy (Arduboy3D.ino is main.cpp)
+# game sources from Arduboy (Catacombs3D.ino is main.cpp)
 CPP_SOURCES = main.cpp
 CPP_SOURCES += Draw.cpp
 CPP_SOURCES += Enemy.cpp
