@@ -2,7 +2,7 @@
 
 # Name of the project
 TARGET = catacombs
-# file name on SD card: ../../../../sd/GAMES/$(APP_NAME).BIN (FAT16: 8 chars)
+# file name on SD card: ../../../sd/GAMES/$(APP_NAME).BIN (FAT16: 8 chars)
 APP_NAME = CATACOMB
 
 # tipe of MK
@@ -13,10 +13,10 @@ F_CPU   = 16000000
 # programmer
 AVRDUDE_PROGRAMMER = usbasp
 
-LIB_DIR = ../../../lib
+LIB_DIR = ../../lib
 ARDUBOY_DIR = $(LIB_DIR)/arduboy
-BOOT_DIR = ../../../bootloader
-SD_GAMES_DIR = ../../../../sd/GAMES
+BOOT_DIR = ../../bootloader
+SD_GAMES_DIR = ../../../sd/GAMES
 BUILD_DIR = build
 
 # game sources from Arduboy (Arduboy3D.ino is main.cpp)
