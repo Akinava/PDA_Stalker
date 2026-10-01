@@ -156,6 +156,38 @@ uint8_t sd_read_sector(uint32_t sector, uint8_t *buf){
   return ok;
 }
 
+// CMD17 and data token, returns 1 on success (the card is selected then)
+uint8_t sd_stream_open(uint32_t sector){
+  if(card_type == SD_TYPE_NONE) return 0;
+
+  sd_select();
+  if(sd_command(SD_CMD17, sd_address(sector)) != SD_R1_READY) goto error;
+
+  uint8_t token;
+  uint16_t retry = SD_READ_RETRY;
+  do{
+    token = spi_transfer(0xFF);
+  }while(token == 0xFF && --retry);
+  if(token != SD_DATA_START_BLOCK) goto error;
+  return 1;
+
+error:
+  sd_unselect();
+  return 0;
+}
+
+uint8_t sd_stream_read(void){
+  return spi_transfer(0xFF);
+}
+
+void sd_stream_close(uint16_t left){
+  // the rest of the data and CRC (not used)
+  for(left += 2; left; left--){
+    spi_send(0xFF);
+  }
+  sd_unselect();
+}
+
 // write 512 bytes of buf to sector, returns 1 on success
 uint8_t sd_write_sector(uint32_t sector, const uint8_t *buf){
   if(card_type == SD_TYPE_NONE) return 0;

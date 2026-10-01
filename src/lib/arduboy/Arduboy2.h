@@ -11,6 +11,19 @@
 
 typedef ArduboyAudio Arduboy2Audio;
 
+// geometry of Arduboy2
+struct Point {
+  int16_t x;
+  int16_t y;
+};
+
+struct Rect {
+  int16_t x;
+  int16_t y;
+  uint8_t width;
+  uint8_t height;
+};
+
 class Arduboy2Base : public Arduboy {
   public:
     void boot(void){ begin(); }
@@ -21,7 +34,7 @@ class Arduboy2Base : public Arduboy {
     void bootLogo(void){}
 
     using Arduboy::display;
-    void display(bool clear){
+    static void display(bool clear){
       Arduboy::display();
       if(clear) Arduboy::clear();
     }

@@ -38,8 +38,17 @@
 #define TONES_REPEAT        0x8001
 void arduboy_tone(unsigned int freq, unsigned long duration_ms);
 void arduboy_tones(const uint16_t *tones, bool in_ram);
+// sequence from a function (it is called from the timer interrupt)
+void arduboy_tones_source(uint16_t (*next)(void));
 void arduboy_no_tone(void);
+// a tone, a rest or a sequence is playing
 bool arduboy_tone_playing(void);
+
+// SPI clock of the display (the other devices on the bus set their own)
+void arduboy_lcd_spi(void);
+// called before the display uses SPI bus: a device that keeps the bus
+// (SD card streaming of ArduboyFX) releases it
+extern void (*arduboy_bus_release)(void);
 
 // EEPROM byte of the sound on / off state, the same as in Arduboy and Arduboy2
 #define EEPROM_AUDIO_ON_OFF 2
@@ -87,6 +96,10 @@ class Arduboy {
     uint8_t buttonsState(void);
     bool pressed(uint8_t buttons);
     bool notPressed(uint8_t buttons);
+    // Arduboy2: state of the frame (pollButtons once per frame)
+    void pollButtons(void);
+    bool justPressed(uint8_t button);
+    bool justReleased(uint8_t button);
 
     void setFrameRate(uint8_t rate);
     bool nextFrame(void);
@@ -94,13 +107,13 @@ class Arduboy {
 
     void initRandomSeed(void);
     void setRGBled(uint8_t red, uint8_t green, uint8_t blue);
-    void invert(bool inverse);
+    static void invert(bool inverse);
 
-    uint8_t *getBuffer(void);
-    void clear(void);
-    void fillScreen(uint8_t color);
-    void display(void);
-    void paintScreen(const uint8_t *image);
+    static uint8_t *getBuffer(void);
+    static void clear(void);
+    static void fillScreen(uint8_t color);
+    static void display(void);
+    static void paintScreen(const uint8_t *image);
 
     void drawPixel(int16_t x, int16_t y, uint8_t color = WHITE);
     uint8_t getPixel(uint8_t x, uint8_t y);
@@ -113,6 +126,8 @@ class Arduboy {
     void fillCircle(int16_t x0, int16_t y0, uint8_t r, uint8_t color = WHITE);
     // Arduboy bitmap: vertical bytes, (h + 7) / 8 rows of w bytes
     void drawBitmap(int16_t x, int16_t y, const uint8_t *bitmap, uint8_t w, uint8_t h, uint8_t color = WHITE);
+    // Arduboy2 RLE compressed bitmap (Cabi): width - 1, height - 1, first colour, spans
+    void drawCompressed(int16_t sx, int16_t sy, const uint8_t *bitmap, uint8_t color = WHITE);
 
     // text: 5x7 font in 6x8 cells, the cell background is cleared
     void setCursor(int16_t x, int16_t y);
@@ -132,6 +147,9 @@ class Arduboy {
   protected:
     friend class Sprites;
     static uint8_t sBuffer[ARDUBOY_BUFFER_SIZE];
+    // Arduboy2: derived classes of games use them
+    uint8_t currentButtonState;
+    uint8_t previousButtonState;
 
   private:
     uint8_t frameCount;
@@ -141,12 +159,12 @@ class Arduboy {
     int16_t cursorY;
     uint8_t textSize;
     bool textWrap;
-    bool inverted;
+    static bool inverted;
 
     size_t printNumber(unsigned long n);
     void checkExit(void);
     void exitMenu(void);
-    void paintRows(const uint8_t *image, uint8_t blank_top, uint8_t blank_bottom);
+    static void paintRows(const uint8_t *image, uint8_t blank_top, uint8_t blank_bottom);
 };
 
 #endif

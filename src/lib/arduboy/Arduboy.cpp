@@ -52,6 +52,13 @@ static volatile bool tone_timed;
 static const uint16_t * volatile tone_seq;
 static const uint16_t *tone_seq_start;
 static bool tone_seq_in_ram;
+static uint16_t (*tone_source)(void);
+
+void (*arduboy_bus_release)(void);
+
+void arduboy_lcd_spi(void){
+  LCD_SPI_FAST();
+}
 
 // GDRAM line checksums: the line is sent only if it is changed.
 // -DARDUBOY_NO_LINE_HASH saves RAM for games that redraw the whole screen
@@ -61,6 +68,7 @@ static bool hash_valid;
 #endif
 
 static uint16_t tone_seq_read(void){
+  if(tone_source) return tone_source();
   const uint16_t *p = tone_seq;
   tone_seq = p + 1;
   return tone_seq_in_ram ? *p : pgm_read_word(p);
@@ -75,6 +83,7 @@ static void tone_seq_next(void){
   }
   if(freq == TONES_END){
     tone_seq = 0;
+    tone_source = 0;
     tone_timed = false;
     speaker_off();
     return;
@@ -124,6 +133,7 @@ static void init_timer(void){
 void arduboy_tone(unsigned int freq, unsigned long duration_ms){
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
     tone_seq = 0;
+    tone_source = 0;
     tone_timed = false;
   }
   speaker_tone(freq);
@@ -137,6 +147,7 @@ void arduboy_tone(unsigned int freq, unsigned long duration_ms){
 
 void arduboy_tones(const uint16_t *tones, bool in_ram){
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
+    tone_source = 0;
     tone_seq_start = tones;
     tone_seq = tones;
     tone_seq_in_ram = in_ram;
@@ -144,16 +155,26 @@ void arduboy_tones(const uint16_t *tones, bool in_ram){
   }
 }
 
+void arduboy_tones_source(uint16_t (*next)(void)){
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
+    tone_source = next;
+    // not 0: the sequence is playing, the pointer itself is not used
+    tone_seq_start = tone_seq = (const uint16_t *)&tone_source;
+    tone_seq_next();
+  }
+}
+
 void arduboy_no_tone(void){
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
     tone_seq = 0;
+    tone_source = 0;
     tone_timed = false;
   }
   speaker_off();
 }
 
 bool arduboy_tone_playing(void){
-  return TCCR0B != 0;
+  return tone_timed || TCCR0B != 0;
 }
 
 void ArduboyTunes::tone(unsigned int freq, unsigned long duration){
@@ -162,6 +183,33 @@ void ArduboyTunes::tone(unsigned int freq, unsigned long duration){
 
 void ArduboyTunes::noTone(void){
   arduboy_no_tone();
+}
+
+/*********************************** heap ************************************/
+
+// as Arduino core (new.cpp): games use new / delete
+void *operator new(size_t size){
+  return malloc(size);
+}
+
+void *operator new[](size_t size){
+  return malloc(size);
+}
+
+void operator delete(void *ptr){
+  free(ptr);
+}
+
+void operator delete[](void *ptr){
+  free(ptr);
+}
+
+void operator delete(void *ptr, size_t){
+  free(ptr);
+}
+
+void operator delete[](void *ptr, size_t){
+  free(ptr);
 }
 
 /********************************** system ***********************************/
@@ -218,6 +266,19 @@ bool Arduboy::pressed(uint8_t buttons){
 
 bool Arduboy::notPressed(uint8_t buttons){
   return (getInput() & buttons) == 0;
+}
+
+void Arduboy::pollButtons(void){
+  previousButtonState = currentButtonState;
+  currentButtonState = getInput();
+}
+
+bool Arduboy::justPressed(uint8_t button){
+  return !(previousButtonState & button) && (currentButtonState & button);
+}
+
+bool Arduboy::justReleased(uint8_t button){
+  return (previousButtonState & button) && !(currentButtonState & button);
 }
 
 void Arduboy::setFrameRate(uint8_t rate){
@@ -313,6 +374,7 @@ void Arduboy::exitMenu(void){
 /********************************** screen ***********************************/
 
 uint8_t Arduboy::sBuffer[ARDUBOY_BUFFER_SIZE];
+bool Arduboy::inverted;
 
 uint8_t *Arduboy::getBuffer(void){
   return sBuffer;
@@ -353,6 +415,13 @@ void Arduboy::paintScreen(const uint8_t *image){
 void Arduboy::paintRows(const uint8_t *image, uint8_t blank_top, uint8_t blank_bottom){
   uint8_t line[2 * LCD_LINE_BYTES];
   uint8_t invert_mask = inverted ? 0xFF : 0x00;
+
+  if(arduboy_bus_release) arduboy_bus_release();
+#ifdef ARDUBOY_LCD_RESYNC
+  // garbage of the other devices on the bus can get into the display:
+  // graphics mode is set again on every frame
+  display_send_command(LCD_GRAPHIC_ON);
+#endif
 
   for(uint8_t y = 0; y < LCD_GDRAM_LINES; y++){
     for(uint8_t half = 0; half < 2; half++){
@@ -511,6 +580,84 @@ void Arduboy::drawBitmap(int16_t x, int16_t y, const uint8_t *bitmap, uint8_t w,
         drawPixel(x + i, y + j, color);
       }
     }
+  }
+}
+
+// bit reader of drawCompressed: bits from the low one
+struct CompressedReader {
+  const uint8_t *src;
+  uint16_t bit;
+  uint8_t byte;
+
+  uint16_t get(uint8_t bits){
+    uint16_t value = 0;
+    for(uint8_t i = 0; i < bits; i++){
+      if(bit == 0x100){
+        bit = 1;
+        byte = pgm_read_byte(src++);
+      }
+      if(byte & bit) value |= 1 << i;
+      bit <<= 1;
+    }
+    return value;
+  }
+};
+
+// the same algorithm as Arduboy2Base::drawCompressed
+void Arduboy::drawCompressed(int16_t sx, int16_t sy, const uint8_t *bitmap, uint8_t color){
+  CompressedReader cs = {bitmap, 0x100, 0};
+
+  int16_t w = cs.get(8) + 1;
+  int16_t h = cs.get(8) + 1;
+  uint8_t col = cs.get(1);    // starting colour
+
+  if(sx + w < 0 || sx > WIDTH - 1 || sy + h < 0 || sy > HEIGHT - 1) return;
+
+  int16_t yOffset = abs(sy) % 8;
+  int16_t sRow = sy / 8;
+  if(sy < 0){
+    sRow--;
+    yOffset = 8 - yOffset;
+  }
+  int16_t rows = (h + 7) / 8;
+
+  int16_t a = 0;
+  int16_t iCol = 0;
+  uint8_t byte = 0;
+  uint16_t bit = 1;
+  while(a < rows){
+    uint8_t bl = 1;
+    while(!cs.get(1)) bl += 2;
+    uint16_t len = cs.get(bl) + 1;    // span length
+
+    for(uint16_t i = 0; i < len; i++){
+      if(col) byte |= bit;
+      bit <<= 1;
+
+      if(bit == 0x100){
+        int16_t bRow = sRow + a;
+        if(bRow <= (HEIGHT / 8) - 1 && bRow > -2 && iCol + sx <= WIDTH - 1 && iCol + sx >= 0){
+          if(bRow >= 0){
+            uint8_t *b = &sBuffer[bRow * WIDTH + sx + iCol];
+            if(color) *b |= byte << yOffset;
+            else *b &= ~(byte << yOffset);
+          }
+          if(yOffset && bRow < (HEIGHT / 8) - 1 && bRow > -2){
+            uint8_t *b = &sBuffer[(bRow + 1) * WIDTH + sx + iCol];
+            if(color) *b |= byte >> (8 - yOffset);
+            else *b &= ~(byte >> (8 - yOffset));
+          }
+        }
+        iCol++;
+        if(iCol >= w){
+          iCol = 0;
+          a++;
+        }
+        byte = 0;
+        bit = 1;
+      }
+    }
+    col = 1 - col;    // toggle colour for the next span
   }
 }
 

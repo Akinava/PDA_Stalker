@@ -45,4 +45,11 @@ uint8_t sd_read_sector(uint32_t sector, uint8_t *buf);
 uint8_t sd_write_sector(uint32_t sector, const uint8_t *buf);
 uint32_t sd_get_sectors(void);
 
+// reading of a sector byte by byte without buffer: the card stays selected
+// (SPI bus is busy) from sd_stream_open to sd_stream_close.
+// sd_stream_close reads the rest of the sector, left = bytes not read
+uint8_t sd_stream_open(uint32_t sector);
+uint8_t sd_stream_read(void);
+void sd_stream_close(uint16_t left);
+
 #endif
