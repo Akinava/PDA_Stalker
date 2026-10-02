@@ -30,12 +30,16 @@ N   ARDU  pin           descr
 28  19 A5 PC5  SCL
 
 === SPEAKER
-VCC - 2N2222 - (+ SPEAKER -) - GND
-        |
-       PD5
+VCC - 2N2222 ------[Single Gear Dial Potentiometer 10K 3 pin]------ [sound off switch] - (+ SPEAKER -) - GND
+         |                                                                 |
+      resistop(1k)                                                         |
+         |                                                                 |
+        PD5                                                          [TRRS pin 2,3]
 
 === VIBRO MOTOR
 VCC - 2N2222 - (+ vibro motor -) - GND
+        |
+     resistop(1k)
         |
        PC2
 
@@ -81,7 +85,7 @@ GND - button A     - PD3
 GND - button down  - PD6
 GND - button right - PD7
 
-=== microphone
+=== microphone MAX9814
 +------+
 |  GND*| - GND
 |  VDD*| - VCC
@@ -130,9 +134,10 @@ RESET - PC6 (RESET)
 |   NS*| -
 |  RST*| -
 | VOUT*| -
-|  BLA*| - VCC
+|  BLA*| - [Single Gear Dial Potentiometer 10K 3 pin] - VCC
 |  BLK*| - GND
 +------+
+
 === 18650 TP4056 Lithium Battery Charger Module
 +-------+
 |--+   *| - TP4056 (+)
@@ -141,7 +146,18 @@ RESET - PC6 (RESET)
 |B |   *| - LiPo 18650 (-)
 |--+   *| - GND
 +-------+
+
 === power switch
               +-------+
 HT7333 VIN ---|       |--- TP4056 (+)
               +-------+
+
+=== TRRS PJ-342 / PJ-342D
++---+
+|  1| - GND
+|  2| - L
+|  3| - R
+|  4| - PC1
+|  5|
+|  6|
++---+
